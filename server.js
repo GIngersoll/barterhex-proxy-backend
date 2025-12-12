@@ -16,7 +16,7 @@ app.use(express.json());
 const API_KEY = process.env.PUBLISHER_API_KEY;
 const SHOPIFY_APP_SECRET = process.env.SHOPIFY_APP_SECRET || '';
 const SPOT_POLL_MIN = Number(process.env.SPOT_POLL_MIN || 10);
-const HISTORY_CRON = process.env.HISTORY_CRON || '30 7 * * *';
+const HISTORY_CRON = process.env.HISTORY_CRON || '45 7 * * *';
 const HISTORY_DAYS = Number(process.env.HISTORY_DAYS || 7);
 const PORT = Number(process.env.PORT || 3000);
 
@@ -196,6 +196,7 @@ app.use((req, res) => res.status(404).json({ error: 'not found' }));
 app.listen(PORT, () => {
   console.log(`barterhex-proxy listening on port ${PORT}`);
 });
+
 
 
 
