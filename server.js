@@ -37,7 +37,7 @@ const cache = {
 
 // --- Helpers ---
 function fmtDate(d = new Date()) {
-  return d.toISOString().slice(0, 10);
+  return d.toISOString().slice(0, HISTORY_DAYS);
 }
 
 function median(arr) {
@@ -196,4 +196,5 @@ app.use((req, res) => res.status(404).json({ error: 'not found' }));
 app.listen(PORT, () => {
   console.log(`barterhex-proxy listening on port ${PORT}`);
 });
+
 
