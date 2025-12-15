@@ -178,16 +178,21 @@ async function fetchSpot() {
   cache.varS = S;
   cache.varSi = S * varH;
 
-  if (cache.varC1 && cache.varC30 && cache.varC365) {
-    cache.varCd = S - cache.varC1;
-    cache.varCdp = (cache.varCd / cache.varC1) * 100;
-
-    cache.varCm = S - cache.varC30;
-    cache.varCmp = (cache.varCm / cache.varC30) * 100;
-
-    cache.varCy = S - cache.varC365;
-    cache.varCyp = (cache.varCy / cache.varC365) * 100;
+  if (cache.varC1) {
+  cache.varCd = S - cache.varC1;
+  cache.varCdp = (cache.varCd / cache.varC1) * 100;
   }
+   
+   if (cache.varC30) {
+   cache.varCm = S - cache.varC30;
+   cache.varCmp = (cache.varCm / cache.varC30) * 100;
+   }
+
+   if (cache.varC365) {
+     cache.varCy = S - cache.varC365;
+     cache.varCyp = (cache.varCy / cache.varC365) * 100;
+   }
+
 
   cache.updatedAt = new Date().toISOString();
 }
@@ -251,5 +256,6 @@ app.get("/proxy/market", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
