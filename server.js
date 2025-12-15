@@ -1,203 +1,258 @@
 /**
- * barterhex-proxy - Express backend for Shopify App Proxy
+ * ENGINE – Market Data Backend (Final)
+ *
+ * Purpose:
+ * - Fetch silver market data from metals.dev
+ * - Cache calendar-based closes privately
+ * - Compute derived market signals
+ * - Expose a minimal, UI-safe market snapshot via Shopify App Proxy
+ *
+ * Public API:
+ *   GET /proxy/market
  */
 
-const express = require('express');
-const axios = require('axios');
-const cron = require('node-cron');
-const crypto = require('crypto');
-const helmet = require('helmet');
+// -----------------------------
+// CONFIGURATION
+// -----------------------------
 
-const app = express();
-app.use(helmet());
-app.use(express.json());
+const varE = 7;        // Days used for median signal
+const varF = 10;       // Spot refresh frequency (minutes)
+const varH = 0.1;      // Troy ounces per token
 
-// --- CONFIG ---
+// -----------------------------
+// ENVIRONMENT
+// -----------------------------
+
 const API_KEY = process.env.PUBLISHER_API_KEY;
-const SHOPIFY_APP_SECRET = process.env.SHOPIFY_APP_SECRET || '';
-const SPOT_POLL_MIN = Number(process.env.SPOT_POLL_MIN || 10);
-const HISTORY_CRON = process.env.HISTORY_CRON || '10 8 * * *';
-const HISTORY_DAYS = Number(process.env.HISTORY_DAYS || 7);
-const PORT = Number(process.env.PORT || 3000);
+const SHOPIFY_APP_SECRET = process.env.SHOPIFY_APP_SECRET;
+const PORT = process.env.PORT || 3000;
 
 if (!API_KEY) {
-  console.error('Missing required env: PUBLISHER_API_KEY');
+  console.error('Missing PUBLISHER_API_KEY');
   process.exit(1);
 }
 
-// metals.dev endpoints
-const SPOT_URL = 'https://api.metals.dev/v1/metal/spot';
-const TIMESERIES_URL = 'https://api.metals.dev/v1/timeseries';
+// -----------------------------
+// IMPORTS
+// -----------------------------
 
-// --- Cache ---
+const express = require('express');
+const crypto = require('crypto');
+const cron = require('node-cron');
+
+const app = express();
+
+// -----------------------------
+// CACHE (IN-MEMORY)
+// -----------------------------
+
 const cache = {
-  spot: { S: null, updatedAt: null },
-  history: { history: [], updatedAt: null }
+  // Private reference closes (calendar-based)
+  varC1: null,
+  varC30: null,
+  varC365: null,
+
+  // Public market outputs
+  varS: null,
+  varSi: null,
+
+  varCd: null,
+  varCdp: null,
+
+  varCm: null,
+  varCmp: null,
+
+  varCy: null,
+  varCyp: null,
+
+  varSm: null,
+
+  updatedAt: null
 };
 
-// --- Helpers ---
-function fmtDate(d = new Date()) {
+// -----------------------------
+// HELPERS
+// -----------------------------
+
+/**
+ * Format Date → YYYY-MM-DD
+ */
+function fmtDate(d) {
   return d.toISOString().slice(0, 10);
 }
 
-function median(arr) {
-  if (!Array.isArray(arr) || arr.length === 0) return null;
-  const a = arr.slice().sort((x,y)=>x-y);
-  const n = a.length;
-  if (n % 2 === 1) return a[(n-1)/2];
-  return Math.max(a[n/2 - 1], a[n/2]);
+/**
+ * Get calendar date N days ago (UTC)
+ */
+function dateMinus(days) {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - days);
+  return fmtDate(d);
 }
 
 /**
- * Correct Shopify App Proxy signature verification (2024/2025)
+ * Median of numeric array
  */
-function verifyShopifyProxy(req) {
+function median(arr) {
+  const a = arr.slice().sort((x, y) => x - y);
+  const n = a.length;
+  return n % 2 ? a[(n - 1) / 2] : Math.max(a[n / 2 - 1], a[n / 2]);
+}
+
+/**
+ * Remove consecutive duplicate closes (weekends / holidays)
+ */
+function dedupeConsecutive(arr) {
+  return arr.filter((v, i) => i === 0 || v !== arr[i - 1]);
+}
+
+/**
+ * Verify Shopify App Proxy HMAC
+ */
+function verifyProxy(req) {
   if (!SHOPIFY_APP_SECRET) return true;
 
-  try {
-    const params = { ...req.query };
-    const signature = params.signature;
+  const hmac = req.query.hmac;
+  if (!hmac) return false;
 
-    if (!signature) return false;
-    delete params.signature;
+  const message = Object.keys(req.query)
+    .filter(k => k !== 'hmac')
+    .sort()
+    .map(k => `${k}=${req.query[k]}`)
+    .join('&');
 
-    // Build sorted param string
-    const sorted = Object.keys(params)
-      .sort()
-      .map(key => `${key}=${params[key]}`)
-      .join('');
+  const digest = crypto
+    .createHmac('sha256', SHOPIFY_APP_SECRET)
+    .update(message)
+    .digest('hex');
 
-    // HMAC using Shopify App Secret
-    const computed = crypto
-      .createHmac('sha256', SHOPIFY_APP_SECRET)
-      .update(sorted)
-      .digest('hex');
-
-    return computed === signature;
-  } catch (e) {
-    console.error('Proxy verification error:', e);
-    return false;
-  }
+  return crypto.timingSafeEqual(
+    Buffer.from(digest),
+    Buffer.from(hmac)
+  );
 }
 
-// --- API fetchers ---
-async function fetchSpotFromPublisher() {
-  try {
-    const r = await axios.get(SPOT_URL, {
-      params: { api_key: API_KEY, metal: 'silver', currency: 'USD' },
-      timeout: 10000
-    });
-    const price = Number(r.data?.rate?.price);
-    if (!Number.isFinite(price)) return null;
+// -----------------------------
+// DATA FETCHERS
+// -----------------------------
 
-    cache.spot = { S: price, updatedAt: new Date().toISOString() };
-    console.log("Spot updated:", price);
-    return cache.spot;
-  } catch (err) {
-    console.error("Spot fetch error:", err.message);
-    return null;
+/**
+ * Fetch 365-day timeseries
+ * - Populate calendar-based closes (private)
+ * - Compute deduplicated median signal (public)
+ */
+async function fetchTimeseries() {
+  const url = new URL('https://api.metals.dev/v1/timeseries');
+  url.searchParams.set('api_key', API_KEY);
+  url.searchParams.set('start_date', dateMinus(366));
+  url.searchParams.set('end_date', fmtDate(new Date()));
+
+  const res = await fetch(url);
+  const data = await res.json();
+
+  const rates = data?.rates || {};
+  const closesByDate = {};
+
+  for (const [date, obj] of Object.entries(rates)) {
+    const v = Number(obj?.metals?.silver);
+    if (Number.isFinite(v)) closesByDate[date] = v;
   }
+
+  // Calendar-based reference closes (private)
+  cache.varC1   = closesByDate[dateMinus(1)];
+  cache.varC30  = closesByDate[dateMinus(30)];
+  cache.varC365 = closesByDate[dateMinus(365)];
+
+  // Deduplicated trading closes → median signal
+  const ordered = Object.keys(closesByDate)
+    .sort()
+    .map(d => closesByDate[d]);
+
+  const trading = dedupeConsecutive(ordered);
+  cache.varSm = median(trading.slice(-varE));
 }
 
-async function fetchHistoryFromPublisher(days = HISTORY_DAYS) {
-  try {
-    const end = new Date();
-    const start = new Date(Date.now() - days * 24 * 3600 * 1000);
+/**
+ * Fetch live spot price and compute deltas
+ */
+async function fetchSpot() {
+  const url = new URL('https://api.metals.dev/v1/metal/spot');
+  url.searchParams.set('api_key', API_KEY);
+  url.searchParams.set('metal', 'silver');
+  url.searchParams.set('currency', 'USD');
 
-    const r = await axios.get(TIMESERIES_URL, {
-      params: {
-        api_key: API_KEY,
-        start_date: fmtDate(start),
-        end_date: fmtDate(end)
-      },
-      timeout: 15000
-    });
+  const res = await fetch(url);
+  const data = await res.json();
 
-    const raw = r.data?.rates || {};
-    const dates = Object.keys(raw).sort();
-    const history = dates
-      .map(d => Number(raw[d]?.metals?.silver))
-      .filter(Number.isFinite);
+  const S = Number(data?.rate?.price);
+  if (!Number.isFinite(S)) return;
 
-    cache.history = { history, updatedAt: new Date().toISOString() };
-    console.log("History updated:", history.length, "days");
-    return cache.history;
-  } catch (err) {
-    console.error("History fetch error:", err.message);
-    return null;
+  cache.varS = S;
+  cache.varSi = S * varH;
+
+  if (cache.varC1 && cache.varC30 && cache.varC365) {
+    cache.varCd  = S - cache.varC1;
+    cache.varCdp = (cache.varCd / cache.varC1) * 100;
+
+    cache.varCm  = S - cache.varC30;
+    cache.varCmp = (cache.varCm / cache.varC30) * 100;
+
+    cache.varCy  = S - cache.varC365;
+    cache.varCyp = (cache.varCy / cache.varC365) * 100;
   }
+
+  cache.updatedAt = new Date().toISOString();
 }
 
-// --- Initial fetch ---
+// -----------------------------
+// SCHEDULING
+// -----------------------------
+
+// Run immediately on deploy
 (async () => {
-  await fetchSpotFromPublisher();
-  await fetchHistoryFromPublisher(HISTORY_DAYS);
+  await fetchTimeseries();
+  await fetchSpot();
 })();
 
-// --- Schedulers ---
-setInterval(fetchSpotFromPublisher, SPOT_POLL_MIN * 60 * 1000);
+// Daily at 6:00 AM MST (12:00 UTC)
+cron.schedule('0 12 * * *', fetchTimeseries, { timezone: 'UTC' });
 
-cron.schedule(HISTORY_CRON, () => {
-  console.log("Daily history job triggered");
-  fetchHistoryFromPublisher(HISTORY_DAYS);
-}, { timezone: 'MST' });
+// Spot refresh every varF minutes
+setInterval(fetchSpot, varF * 60 * 1000);
 
-// --- Routes ---
-app.get('/_health', (req, res) => {
-  res.json({
-    ok: true,
-    spotUpdated: cache.spot.updatedAt,
-    historyUpdated: cache.history.updatedAt
-  });
-});
+// -----------------------------
+// SHOPIFY PROXY ENDPOINT
+// -----------------------------
 
-/**
- * /proxy/current
- */
-app.get('/proxy/current', (req, res) => {
-  if (!verifyShopifyProxy(req)) {
+app.get('/proxy/market', (req, res) => {
+  if (!verifyProxy(req)) {
     return res.status(403).json({ error: 'invalid proxy signature' });
   }
 
-  if (!cache.spot.updatedAt) {
-    return res.status(503).json({ error: 'spot not available' });
-  }
-
-  res.set('Cache-Control', 'public, max-age=60');
+  // Expose only UI-safe market fields
   res.json({
-    S: cache.spot.S,
-    updatedAt: cache.spot.updatedAt
+    varS: cache.varS,
+    varSi: cache.varSi,
+
+    varCd: cache.varCd,
+    varCdp: cache.varCdp,
+
+    varCm: cache.varCm,
+    varCmp: cache.varCmp,
+
+    varCy: cache.varCy,
+    varCyp: cache.varCyp,
+
+    varSm: cache.varSm,
+
+    updatedAt: cache.updatedAt
   });
 });
 
-/**
- * /proxy/history
- */
-app.get('/proxy/history', (req, res) => {
-  if (!verifyShopifyProxy(req)) {
-    return res.status(403).json({ error: 'invalid proxy signature' });
-  }
+// -----------------------------
+// START SERVER
+// -----------------------------
 
-  const days = Number(req.query.days || HISTORY_DAYS);
-  const history = cache.history.history.slice(-days);
-
-  res.set('Cache-Control', 'public, max-age=3600');
-  res.json({
-    history,
-    median: median(history),
-    updatedAt: cache.history.updatedAt
-  });
-});
-
-// Fallback
-app.use((req, res) => res.status(404).json({ error: 'not found' }));
-
-// Listen
 app.listen(PORT, () => {
-  console.log(`barterhex-proxy listening on port ${PORT}`);
+  console.log(`ENGINE market backend running on port ${PORT}`);
 });
-
-
-
-
-
