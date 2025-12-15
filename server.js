@@ -144,9 +144,12 @@ async function fetchTimeseries() {
   }
 
   // Calendar-based reference closes
-  cache.varC1 = closesByDate[dateMinus(1)];
-  cache.varC30 = closesByDate[dateMinus(30)];
-  cache.varC365 = closesByDate[dateMinus(365)];
+   const dates = Object.keys(closesByDate).sort();
+   const last = dates[dates.length - 1];
+
+   cache.varC1   = closesByDate[dates[dates.length - 2]];
+   cache.varC30  = closesByDate[dates[dates.length - 31]];
+   cache.varC365 = closesByDate[dates[dates.length - 366]];
 
   // Deduplicated trading closes → median signal
   const ordered = Object.keys(closesByDate)
@@ -248,4 +251,5 @@ app.get("/proxy/market", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
