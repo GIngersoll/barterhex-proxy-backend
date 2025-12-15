@@ -129,7 +129,7 @@ function verifyProxy(req) {
 async function fetchTimeseries() {
   const url = new URL("https://api.metals.dev/v1/timeseries");
   url.searchParams.set("api_key", API_KEY);
-  url.searchParams.set("start_date", dateMinus(366));
+  url.searchParams.set("start_date", dateMinus(370));
   url.searchParams.set("end_date", fmtDate(new Date()));
 
   const res = await fetch(url);
@@ -248,3 +248,4 @@ app.get("/proxy/market", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
