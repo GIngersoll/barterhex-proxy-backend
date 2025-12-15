@@ -122,6 +122,23 @@ function verifyProxy(req) {
 -------------------------------- */
 
 /**
+ * Fetch single calendar close for a specific date
+ */
+async function fetchCloseForDate(date) {
+  const url = new URL("https://api.metals.dev/v1/timeseries");
+  url.searchParams.set("api_key", API_KEY);
+  url.searchParams.set("start_date", date);
+  url.searchParams.set("end_date", date);
+
+  const res = await fetch(url);
+  const data = await res.json();
+
+  const day = Object.values(data?.rates || {})[0];
+  const v = Number(day?.metals?.silver);
+  return Number.isFinite(v) ? v : null;
+}
+
+/**
  * Fetch 365-day timeseries
  * - Populate calendar-based closes (private)
  * - Compute deduplicated median signal (public)
@@ -143,13 +160,10 @@ async function fetchTimeseries() {
     if (Number.isFinite(v)) closesByDate[date] = v;
   }
 
-  // Calendar-based reference closes
-   const dates = Object.keys(closesByDate).sort();
-   const last = dates[dates.length - 1];
-
-   cache.varC1   = closesByDate[dates[dates.length - 2]];
-   cache.varC30  = closesByDate[dates[dates.length - 31]];
-   cache.varC365 = closesByDate[dates[dates.length - 366]];
+  // Calendar-based reference closes (FETCHED INDEPENDENTLY)
+  cache.varC1   = await fetchCloseForDate(dateMinus(1));
+  cache.varC30  = await fetchCloseForDate(dateMinus(30));
+  cache.varC365 = await fetchCloseForDate(dateMinus(365));
 
   // Deduplicated trading closes → median signal
   const ordered = Object.keys(closesByDate)
@@ -179,20 +193,19 @@ async function fetchSpot() {
   cache.varSi = S * varH;
 
   if (cache.varC1) {
-  cache.varCd = S - cache.varC1;
-  cache.varCdp = (cache.varCd / cache.varC1) * 100;
+    cache.varCd = S - cache.varC1;
+    cache.varCdp = (cache.varCd / cache.varC1) * 100;
   }
-   
-   if (cache.varC30) {
-   cache.varCm = S - cache.varC30;
-   cache.varCmp = (cache.varCm / cache.varC30) * 100;
-   }
 
-   if (cache.varC365) {
-     cache.varCy = S - cache.varC365;
-     cache.varCyp = (cache.varCy / cache.varC365) * 100;
-   }
+  if (cache.varC30) {
+    cache.varCm = S - cache.varC30;
+    cache.varCmp = (cache.varCm / cache.varC30) * 100;
+  }
 
+  if (cache.varC365) {
+    cache.varCy = S - cache.varC365;
+    cache.varCyp = (cache.varCy / cache.varC365) * 100;
+  }
 
   cache.updatedAt = new Date().toISOString();
 }
@@ -208,7 +221,7 @@ async function fetchSpot() {
 })();
 
 // Daily at 12:00 UTC
-cron.schedule("0 12 * * *", fetchTimeseries, { timezone: "UTC" });
+cron.schedule("5 12 * * *", fetchTimeseries, { timezone: "UTC" });
 
 // Spot refresh every varF minutes
 setInterval(fetchSpot, varF * 60 * 1000);
@@ -256,6 +269,3 @@ app.get("/proxy/market", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
-
-
-
