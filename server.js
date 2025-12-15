@@ -112,7 +112,7 @@ function dedupeConsecutive(arr) {
 function verifyProxy(req) {
   if (!SHOPIFY_APP_SECRET) return true;
 
-  const hmac = req.query.hmac;
+  const hmac = req.query.signature;
   if (!hmac) return false;
 
   const message = Object.keys(req.query)
@@ -256,3 +256,4 @@ app.get('/proxy/market', (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE market backend running on port ${PORT}`);
 });
+
