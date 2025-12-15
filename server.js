@@ -107,16 +107,16 @@ function dedupeConsecutive(arr) {
 }
 
 /**
- * Verify Shopify App Proxy HMAC
+ * Verify Shopify App Proxy signature
  */
 function verifyProxy(req) {
   if (!SHOPIFY_APP_SECRET) return true;
 
-  const hmac = req.query.signature;
-  if (!hmac) return false;
+  const signature = req.query.signature;
+  if (!signature) return false;
 
   const message = Object.keys(req.query)
-    .filter(k => k !== 'hmac')
+    .filter(k => k !== 'signature')
     .sort()
     .map(k => `${k}=${req.query[k]}`)
     .join('&');
@@ -128,7 +128,7 @@ function verifyProxy(req) {
 
   return crypto.timingSafeEqual(
     Buffer.from(digest),
-    Buffer.from(hmac)
+    Buffer.from(signature)
   );
 }
 
@@ -214,7 +214,7 @@ async function fetchSpot() {
   await fetchSpot();
 })();
 
-// Daily at 6:00 AM MST (12:00 UTC)
+// Daily at 12:00 UTC
 cron.schedule('0 12 * * *', fetchTimeseries, { timezone: 'UTC' });
 
 // Spot refresh every varF minutes
@@ -256,4 +256,3 @@ app.get('/proxy/market', (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE market backend running on port ${PORT}`);
 });
-
