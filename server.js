@@ -206,7 +206,7 @@ async function fetchSpot() {
     cache.varSi = round2(S * varH);
 
   if (cache.varC1) {
-    cache.varCd = S - cache.varC1;
+    cache.varCd = round2(S - cache.varC1);
    cache.varCdp = round2((cache.varCd / cache.varC1) * 100);
   }
 
@@ -282,6 +282,7 @@ app.get("/proxy/market", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
