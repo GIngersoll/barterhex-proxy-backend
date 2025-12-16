@@ -143,6 +143,14 @@ async function fetchCloseForDate(date) {
   return Number.isFinite(v) ? v : null;
 }
 
+async function fetchCloseWithFallback(daysAgo, maxBack = 7) {
+  for (let i = 0; i <= maxBack; i++) {
+    const v = await fetchCloseForDate(dateMinus(daysAgo + i));
+    if (Number.isFinite(v)) return v;
+  }
+  return null;
+}
+
 /**
  * Fetch varE-day timeseries
  * - Populate calendar-based closes (private)
@@ -166,7 +174,7 @@ async function fetchTimeseries() {
   }
 
   // Calendar-based reference closes (FETCHED INDEPENDENTLY)
-  cache.varC1   = await fetchCloseForDate(dateMinus(1));
+  cache.varC1 = await fetchCloseWithFallback(1);
   cache.varC30  = await fetchCloseForDate(dateMinus(30));
   cache.varC365 = await fetchCloseForDate(dateMinus(365));
 
@@ -274,5 +282,6 @@ app.get("/proxy/market", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
