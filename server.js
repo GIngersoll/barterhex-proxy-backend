@@ -277,6 +277,14 @@ app.get("/proxy/market", (req, res) => {
   });
 });
 
+app.get("/proxy/pricing", (req, res) => {
+  if (!verifyProxy(req)) {
+    return res.status(403).json({ error: "invalid proxy signature" });
+  }
+
+  res.json(getPricing(cache));
+});
+
 /* -----------------------------
    START SERVER
 -------------------------------- */
@@ -284,6 +292,7 @@ app.get("/proxy/market", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
