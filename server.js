@@ -144,15 +144,15 @@ async function fetchCloseForDate(date) {
 }
 
 /**
- * Fetch 365-day timeseries
+ * Fetch varE-day timeseries
  * - Populate calendar-based closes (private)
  * - Compute deduplicated median signal (public)
  */
 async function fetchTimeseries() {
   const url = new URL("https://api.metals.dev/v1/timeseries");
   url.searchParams.set("api_key", API_KEY);
-  url.searchParams.set("start_date", dateMinus(370));
-  url.searchParams.set("end_date", fmtDate(new Date()));
+  url.searchParams.set("start_date", dateMinus(varE));
+  url.searchParams.set("end_date", dateMinus(1)); 
 
   const res = await fetch(url);
   const data = await res.json();
@@ -225,8 +225,8 @@ async function fetchSpot() {
   await fetchSpot();
 })();
 
-// Daily at 12:00 UTC
-cron.schedule("5 12 * * *", fetchTimeseries, { timezone: "UTC" });
+// Daily at 11:10 UTC
+cron.schedule("10 11 * * *", fetchTimeseries, { timezone: "UTC" });
 
 // Spot refresh every varF minutes
 setInterval(fetchSpot, varF * 60 * 1000);
@@ -274,4 +274,5 @@ app.get("/proxy/market", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
