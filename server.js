@@ -13,6 +13,8 @@ const cron = require("node-cron");
 
 const app = express();
 
+const { getPricing } = require("./pricing");
+
 /* -----------------------------
    CONFIGURATION
 -------------------------------- */
@@ -282,6 +284,7 @@ app.get("/proxy/market", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
