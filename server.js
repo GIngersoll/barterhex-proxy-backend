@@ -73,6 +73,11 @@ const cache = {
    HELPERS
 -------------------------------- */
 
+/* Rounding */
+function round2(v) {
+  return Number.isFinite(v) ? Number(v.toFixed(2)) : null;
+}
+
 function fmtDate(d) {
   return d.toISOString().slice(0, 10);
 }
@@ -171,7 +176,7 @@ async function fetchTimeseries() {
     .map((d) => closesByDate[d]);
 
   const trading = dedupeConsecutive(ordered);
-  cache.varSm = median(trading.slice(-varE));
+  cache.varSm = round2(median(trading.slice(-varE)));
 }
 
 /**
@@ -189,22 +194,22 @@ async function fetchSpot() {
   const S = Number(data?.rate?.price);
   if (!Number.isFinite(S)) return;
 
-  cache.varS = S;
-  cache.varSi = S * varH;
+  cache.varS = round2(S);
+    cache.varSi = round2(S * varH);
 
   if (cache.varC1) {
-    cache.varCd = S - cache.varC1;
-    cache.varCdp = (cache.varCd / cache.varC1) * 100;
+    cache.varCd = round2(S - cache.varC1);
+   cache.varCdp = round2((cache.varCd / cache.varC1) * 100);
   }
 
   if (cache.varC30) {
-    cache.varCm = S - cache.varC30;
-    cache.varCmp = (cache.varCm / cache.varC30) * 100;
+    cache.varCm = round2(S - cache.varC30);
+    cache.varCmp = round2((cache.varCm / cache.varC30) * 100);
   }
 
   if (cache.varC365) {
-    cache.varCy = S - cache.varC365;
-    cache.varCyp = (cache.varCy / cache.varC365) * 100;
+    cache.varCy = round2(S - cache.varC365);
+    cache.varCyp = round2((cache.varCy / cache.varC365) * 100);
   }
 
   cache.updatedAt = new Date().toISOString();
@@ -269,3 +274,4 @@ app.get("/proxy/market", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
