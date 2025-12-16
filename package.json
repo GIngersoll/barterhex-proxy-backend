@@ -2,9 +2,9 @@
   "name": "engine-market-backend",
   "version": "1.0.0",
   "type": "commonjs",
-  "main": "server.js",
+  "main": "ticker.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node ticker.js"
   },
   "dependencies": {
     "express": "^4.19.0",
@@ -14,3 +14,4 @@
     "node": ">=18"
   }
 }
+
