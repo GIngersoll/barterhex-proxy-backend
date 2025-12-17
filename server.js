@@ -80,6 +80,10 @@ function round2(v) {
   return Number.isFinite(v) ? Number(v.toFixed(2)) : null;
 }
 
+function round1(v) {
+  return Number.isFinite(v) ? Number(v.toFixed(1)) : null;
+}
+
 function fmtDate(d) {
   return d.toISOString().slice(0, 10);
 }
@@ -209,17 +213,17 @@ async function fetchSpot() {
 
   if (cache.varC1) {
     cache.varCd = round2(S - cache.varC1);
-   cache.varCdp = round2((cache.varCd / cache.varC1) * 100);
+   cache.varCdp = round1((cache.varCd / cache.varC1) * 100);
   }
 
   if (cache.varC30) {
     cache.varCm = round2(S - cache.varC30);
-    cache.varCmp = round2((cache.varCm / cache.varC30) * 100);
+    cache.varCmp = round1((cache.varCm / cache.varC30) * 100);
   }
 
   if (cache.varC365) {
     cache.varCy = round2(S - cache.varC365);
-    cache.varCyp = round2((cache.varCy / cache.varC365) * 100);
+    cache.varCyp = round1((cache.varCy / cache.varC365) * 100);
   }
 
   cache.updatedAt = new Date().toISOString();
@@ -292,6 +296,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
