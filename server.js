@@ -282,11 +282,44 @@ app.get("/proxy/market", (req, res) => {
 });
 
 app.get("/proxy/pricing", (req, res) => {
+  // Disable caching
+  res.setHeader(
+    "Cache-Control",
+    "no-store, no-cache, must-revalidate, proxy-revalidate"
+  );
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+
+  // Verify Shopify App Proxy
   if (!verifyProxy(req)) {
     return res.status(403).json({ error: "invalid proxy signature" });
   }
 
-  res.json(getPricing(cache));
+  // Parse + validate quantity
+  const varQ = Number(req.query.varQ);
+  if (!Number.isFinite(varQ) || varQ <= 0) {
+    return res.status(400).json({ error: "invalid quantity" });
+  }
+
+  // Optional hard cap
+  const MAX_Q = 500;
+  if (varQ > MAX_Q) {
+    return res.status(400).json({ error: "quantity too large" });
+  }
+
+  // Ensure required market data exists
+  if (!Number.isFinite(cache.varSm)) {
+    return res.status(503).json({ error: "pricing unavailable" });
+  }
+
+  // Compute pricing
+  const pricing = getPricing(cache, varQ);
+  if (!pricing) {
+    return res.status(503).json({ error: "pricing unavailable" });
+  }
+
+  // Success
+  res.json(pricing);
 });
 
 /* -----------------------------
@@ -296,6 +329,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
