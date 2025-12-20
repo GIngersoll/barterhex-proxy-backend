@@ -44,8 +44,11 @@ function getPricing(cache, varQ) {
   const rawTu = varSc * (1 + varPf) * varG;
   const varTu = truncate2(rawTu);
 
+  const varTd = truncate2(varTu * varQ);
+
   return {
-    varTu
+    varTu,
+    varTd
   };
 }
 
