@@ -3,7 +3,7 @@
 const varA = 25.0;   // premium %, no discount
 const varB = 15.0;   // premium %, max discount
 const varC = 50;    // quantity for max discount
-const varD = 1;      // quantity for no discount
+const varD = 2;      // quantity for no discount
 const varX = 2.5;    // discount curve exponent: higher = more aggressive early discount
 
 const varG = 3.0;    // ounces per HexStack (backend truth)
