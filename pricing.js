@@ -2,8 +2,9 @@
 
 const varA = 25.0;   // premium %, no discount
 const varB = 15.0;   // premium %, max discount
-const varC = 100;    // quantity for max discount
+const varC = 50;    // quantity for max discount
 const varD = 1;      // quantity for no discount
+const varX = 2.5;    // discount curve exponent: higher = more aggressive early discount
 
 const varG = 3.0;    // ounces per HexStack (backend truth)
 
@@ -16,14 +17,26 @@ function truncate2(v) {
 }
 
 function computeVarPf(varQ) {
+  // Bounds
   if (varQ <= varD) return varA / 100;
   if (varQ >= varC) return varB / 100;
 
-  return (
-    ((varA - varB) / 100) *
-      (1 - (varQ - varD) / (varC - varD)) +
-    (varB / 100)
-  );
+  // Normalize quantity to [0, 1]
+  const t = (varQ - varD) / (varC - varD);
+
+  /*
+    Curved (parabolic / power) discount model
+    curve = 1 - (1 - t)^varX
+
+    varX controls aggressiveness:
+      2.0  -> conservative (quadratic)
+      2.5  -> balanced (recommended)
+      3.0+ -> aggressive early discount
+  */
+  const curve = 1 - Math.pow(1 - t, varX);
+
+  // Interpolate premium from varA → varB
+  return (varA - (varA - varB) * curve) / 100;
 }
 
 /* ---------- main ---------- */
