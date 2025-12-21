@@ -327,6 +327,7 @@ async function fetchSpot() {
       resetPollTimer();
     }
   }
+}
 
   lastVarS = newVarS;
 
@@ -456,4 +457,5 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
