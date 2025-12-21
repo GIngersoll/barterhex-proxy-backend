@@ -179,6 +179,17 @@ async function fetchTimeseries() {
 
   // Calendar-based reference closes (FETCHED INDEPENDENTLY)
   cache.varC1 = await fetchCloseForDate(dateMinus(1));  // Fetch data for 1 day ago
+
+   // Log the fetched value to check if it's valid
+console.log("Fetched varC1:", cache.varC1);
+
+// Check if varC1 is a valid number
+if (Number.isFinite(cache.varC1)) {
+  console.log("varC1 is valid:", cache.varC1);
+} else {
+  console.log("varC1 is invalid or null");
+}
+   
   cache.varC30 = await fetchCloseForDate(dateMinus(30));  // Fetch data for 30 days ago
   cache.varC365 = await fetchCloseForDate(dateMinus(365));  // Fetch data for 365 days ago
 
@@ -331,3 +342,4 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
