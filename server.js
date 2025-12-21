@@ -280,20 +280,26 @@ async function fetchSpot() {
 const varMstat = getMarketStatus();
 
 function getMarketStatus() {
-  // Get the current date and time in Eastern Time (ET)
-  const now = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
-  const currentHour = now.getHours();
-  const currentMinute = now.getMinutes();
-  const dayOfWeek = now.getDay();  // 0 = Sunday, 6 = Saturday
-  console.log('Today is day number:', dayOfWeek);
-  console.log('Current time is:', now.toLocaleTimeString());
+  // Get current date and time in Eastern Time (ET)
+  const now = new Date();
+  const EastCoastTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+
+  // Extract Eastern Time (ET) values
+  const currentHour = EastCoastTime.getHours();
+  const currentMinute = EastCoastTime.getMinutes();
+  const dayOfWeek = EastCoastTime.getDay();  // 0 = Sunday, 6 = Saturday
   
+  // Log current time in Eastern Time
+  console.log('Current time in Eastern Time:', EastCoastTime);
+  console.log('Current hour in Eastern Time:', currentHour);
+  console.log('Current day of the week in Eastern Time:', dayOfWeek);
+
   // Check if it's Monday to Thursday and between the break times
   if (dayOfWeek >= 1 && dayOfWeek <= 4) {
     const breakStart = varMOnBreak[dayOfWeek - 1];  // Break start for current day
     const breakEnd = varMOffBreak[dayOfWeek - 1];   // Break end for current day
 
-    if (now >= breakStart && now < breakEnd) {
+    if (EastCoastTime >= breakStart && EastCoastTime < breakEnd) {
       return 2; // Market is on break (lunch)
     }
     return 1; // Market is open
@@ -301,7 +307,7 @@ function getMarketStatus() {
 
   // Check if it's Friday and after market close time
   if (dayOfWeek === 5) {
-    if (now >= varMClose) {
+    if (EastCoastTime >= varMClose) {
       return 0; // Market is closed after market close time on Friday
     }
     return 1; // Market is open on Friday before close time
@@ -309,12 +315,10 @@ function getMarketStatus() {
 
   // Check if it's Sunday and after market open time
   if (dayOfWeek === 0) {
-    if (now >= varMOpen) {
+    if (EastCoastTime >= varMOpen) {
       return 1; // Market is open after market open time on Sunday
-      console.log('DING');
     }
     return 0; // Market is closed on Sunday before open time
-    console.log('DONG');
   }
 
   // Check for Saturday (market is closed)
@@ -425,6 +429,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
