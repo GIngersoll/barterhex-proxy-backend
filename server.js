@@ -148,12 +148,31 @@ async function fetchCloseForDate(date) {
   url.searchParams.set("end_date", date);
 
   const res = await fetch(url);
+    if (!res.ok) {
+      console.error("API request failed for date:", date);
+      return null;
+    }
   const data = await res.json();
+
+     // Log the full response to debug
+  console.log("API Response for date", date, data);
 
   const day = Object.values(data?.rates || {})[0];
   const v = Number(day?.metals?.silver);
-  return Number.isFinite(v) ? v : null;
+
+   
+  if (!Number.isFinite(v)) {
+    console.error(`Invalid data for ${date}:`, v);
+    return null;  // If the value isn't valid, return null
+  }
+  
+  return v;
 }
+
+catch (error) {
+    console.error("Error fetching data for date:", date, error);
+    return null;
+  }
 
 /**
  * Fetch varE-day timeseries
@@ -342,4 +361,5 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
