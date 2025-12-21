@@ -48,6 +48,7 @@ if (!API_KEY) {
 const cache = {
   // Private reference closes (calendar-based)
   varC1: null,
+  varC1Prev: null, // previous trading-day close
   varC30: null,
   varC365: null,
 
@@ -242,10 +243,20 @@ async function fetchTimeseries() {
     if (Number.isFinite(v)) closesByDate[date] = v;
   }
 
-  // Calendar-based reference closes (FETCHED INDEPENDENTLY)
-  cache.varC1 = await fetchCloseWithFallback(1);
-  cache.varC30  = await fetchCloseForDate(dateMinus(30));
-  cache.varC365 = await fetchCloseForDate(dateMinus(365));
+    // Calendar-based reference closes (FETCHED INDEPENDENTLY)
+    // 1-day close with previous-session tracking
+   const newC1 = await fetchCloseWithFallback(1);
+
+   if (cache.varC1 !== null && newC1 !== null && newC1 !== cache.varC1) {
+     // Trading close advanced → shift previous close
+     cache.varC1Prev = cache.varC1;
+   }
+
+   cache.varC1 = newC1;
+
+   // Longer horizons (no special handling needed)
+   cache.varC30  = await fetchCloseForDate(dateMinus(30));
+   cache.varC365 = await fetchCloseForDate(dateMinus(365));
 
   // Deduplicated trading closes → median signal
   const ordered = Object.keys(closesByDate)
@@ -467,6 +478,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
