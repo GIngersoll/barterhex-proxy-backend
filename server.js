@@ -89,6 +89,9 @@ const cache = {
   // Median signal
   varSm: null,
 
+  // Market status
+  varMStatus: null,
+
   // Last update timestamp
   updatedAt: null
 };
@@ -362,7 +365,7 @@ app.get("/proxy/market", (req, res) => {
     varCyp: cache.varCyp,
 
     varSm: cache.varSm,
-    updatedAt: cache.updatedAt,
+    varMStatus: cache.varMStatus,
     updatedAt: cache.updatedAt
   });
 });
@@ -417,6 +420,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
