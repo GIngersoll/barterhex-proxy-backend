@@ -285,6 +285,7 @@ function getMarketStatus() {
   const currentMinute = now.getMinutes();
   const dayOfWeek = now.getDay();  // 0 = Sunday, 6 = Saturday
   console.log('Today is day number:', dayOfWeek);
+  console.log('Current time is:', now.toLocaleTimeString());
   
   // Check if it's Monday to Thursday and between the break times
   if (dayOfWeek >= 1 && dayOfWeek <= 4) {
@@ -309,8 +310,10 @@ function getMarketStatus() {
   if (dayOfWeek === 0) {
     if (now >= varMOpen) {
       return 1; // Market is open after market open time on Sunday
+      console.log('DING');
     }
     return 0; // Market is closed on Sunday before open time
+    console.log('DONG');
   }
 
   // Check for Saturday (market is closed)
@@ -421,6 +424,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
