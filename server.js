@@ -275,6 +275,7 @@ async function fetchSpot() {
   cache.varMStatus = varMStatus;
    
   cache.updatedAt = new Date().toISOString();
+  console.log('Today is day number:', dayOfWeek);
 }
 
 const varMstat = getMarketStatus();
@@ -420,6 +421,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
