@@ -275,10 +275,6 @@ async function fetchSpot() {
   cache.varMStatus = varMStatus;
    
   cache.updatedAt = new Date().toISOString();
-
-  const now = new Date();
-  const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-  console.log('Today is day number:', dayOfWeek);
 }
 
 const varMstat = getMarketStatus();
@@ -288,6 +284,7 @@ function getMarketStatus() {
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
   const dayOfWeek = now.getDay();  // 0 = Sunday, 6 = Saturday
+  console.log('Today is day number:', dayOfWeek);
   
   // Check if it's Monday to Thursday and between the break times
   if (dayOfWeek >= 1 && dayOfWeek <= 4) {
@@ -424,6 +421,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
