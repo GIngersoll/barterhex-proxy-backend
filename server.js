@@ -280,7 +280,8 @@ async function fetchSpot() {
 const varMstat = getMarketStatus();
 
 function getMarketStatus() {
-  const now = new Date();
+  // Get the current date and time in Eastern Time (ET)
+  const now = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
   const dayOfWeek = now.getDay();  // 0 = Sunday, 6 = Saturday
@@ -424,6 +425,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
