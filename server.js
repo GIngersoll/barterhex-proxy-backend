@@ -346,21 +346,28 @@ async function fetchSpot() {
   cache.varS = newVarS;
   cache.varSi = round2(newVarS * varH);
 
-  if (cache.varC1) {
+  if (cache.varC1 && cache.varC1Prev) {
+
+  // Compute once if missing (e.g. after deploy)
+  if (cache.varCdSession === null || cache.varCdpSession === null) {
+    const refClose = cache.varC1Prev;
+
+    cache.varCdSession = round2(newVarS - refClose);
+    cache.varCdpSession = round1((cache.varCdSession / refClose) * 100);
+  }
+
+  // Recompute live ONLY when market is open
   if (cache.varMCon === 1) {
-    // Market open → recompute session delta
     const refClose = cache.varC1;
 
     cache.varCdSession = round2(newVarS - refClose);
     cache.varCdpSession = round1((cache.varCdSession / refClose) * 100);
   }
 
-  // Always expose last valid session delta
+  // Always expose frozen or live value
   cache.varCd = cache.varCdSession;
   cache.varCdp = cache.varCdpSession;
 }
-
-
 
   if (cache.varC30) {
     cache.varCm = round2(newVarS - cache.varC30);
@@ -480,6 +487,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
