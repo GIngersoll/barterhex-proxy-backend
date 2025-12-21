@@ -317,6 +317,10 @@ async function fetchSpot() {
 
   } else {
     // PRICE CHANGED
+   if (cache.varC1) {
+    cache.varC1Frozen = cache.varC1;
+   }
+        
    cache.varMCon = 1;
         
     sameCount = 0;
@@ -335,9 +339,15 @@ async function fetchSpot() {
   cache.varSi = round2(newVarS * varH);
 
   if (cache.varC1) {
-    cache.varCd = round2(newVarS - cache.varC1);
-    cache.varCdp = round1((cache.varCd / cache.varC1) * 100);
-  }
+     const refClose =
+     cache.varMCon === 0 && cache.varC1Frozen
+     ? cache.varC1Frozen   // closed market: last-change reference
+     : cache.varC1;        // open market: last trading close
+
+     cache.varCd = round2(newVarS - refClose);
+     cache.varCdp = round1((cache.varCd / refClose) * 100);
+   }
+
 
   if (cache.varC30) {
     cache.varCm = round2(newVarS - cache.varC30);
@@ -457,5 +467,6 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
