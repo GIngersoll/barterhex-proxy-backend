@@ -84,22 +84,26 @@ function round1(v) {
   return Number.isFinite(v) ? Number(v.toFixed(1)) : null;
 }
 
+/* Date formatting */
 function fmtDate(d) {
   return d.toISOString().slice(0, 10);
 }
 
+/* Date manipulation */
 function dateMinus(days) {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - days);
   return fmtDate(d);
 }
 
+/* Median calculation for deduplicated signal */
 function median(arr) {
   const a = arr.slice().sort((x, y) => x - y);
   const n = a.length;
   return n % 2 ? a[(n - 1) / 2] : Math.max(a[n / 2 - 1], a[n / 2]);
 }
 
+/* Remove consecutive duplicates */
 function dedupeConsecutive(arr) {
   return arr.filter((v, i) => i === 0 || v !== arr[i - 1]);
 }
@@ -108,6 +112,7 @@ function dedupeConsecutive(arr) {
    SHOPIFY APP PROXY VERIFICATION
 -------------------------------- */
 
+// Function to verify the proxy signature for Shopify requests
 function verifyProxy(req) {
   const { signature, ...params } = req.query;
   if (!signature) return false;
@@ -134,6 +139,7 @@ function verifyProxy(req) {
 
 /**
  * Fetch single calendar close for a specific date
+ * This retrieves the silver close price for a given date from the API
  */
 async function fetchCloseForDate(date) {
   const url = new URL("https://api.metals.dev/v1/timeseries");
@@ -147,14 +153,6 @@ async function fetchCloseForDate(date) {
   const day = Object.values(data?.rates || {})[0];
   const v = Number(day?.metals?.silver);
   return Number.isFinite(v) ? v : null;
-}
-
-async function fetchCloseWithFallback(daysAgo, maxBack = 7) {
-  for (let i = 0; i <= maxBack; i++) {
-    const v = await fetchCloseForDate(dateMinus(daysAgo + i));
-    if (Number.isFinite(v)) return v;
-  }
-  return null;
 }
 
 /**
@@ -180,9 +178,9 @@ async function fetchTimeseries() {
   }
 
   // Calendar-based reference closes (FETCHED INDEPENDENTLY)
-  cache.varC1 = await fetchCloseWithFallback(1);
-  cache.varC30  = await fetchCloseForDate(dateMinus(30));
-  cache.varC365 = await fetchCloseForDate(dateMinus(365));
+  cache.varC1 = await fetchCloseForDate(dateMinus(1));  // Fetch data for 1 day ago
+  cache.varC30 = await fetchCloseForDate(dateMinus(30));  // Fetch data for 30 days ago
+  cache.varC365 = await fetchCloseForDate(dateMinus(365));  // Fetch data for 365 days ago
 
   // Deduplicated trading closes → median signal
   const ordered = Object.keys(closesByDate)
@@ -195,6 +193,7 @@ async function fetchTimeseries() {
 
 /**
  * Fetch live spot price and compute deltas
+ * This gets the current silver spot price and computes changes relative to the cached reference closes
  */
 async function fetchSpot() {
   const url = new URL("https://api.metals.dev/v1/metal/spot");
@@ -209,11 +208,11 @@ async function fetchSpot() {
   if (!Number.isFinite(S)) return;
 
   cache.varS = round2(S);
-    cache.varSi = round2(S * varH);
+  cache.varSi = round2(S * varH);
 
   if (cache.varC1) {
     cache.varCd = round2(S - cache.varC1);
-   cache.varCdp = round1((cache.varCd / cache.varC1) * 100);
+    cache.varCdp = round1((cache.varCd / cache.varC1) * 100);
   }
 
   if (cache.varC30) {
@@ -233,22 +232,23 @@ async function fetchSpot() {
    SCHEDULING
 -------------------------------- */
 
-// Run immediately on deploy
+// Run immediately on deploy to fetch initial market data
 (async () => {
   await fetchTimeseries();
   await fetchSpot();
 })();
 
-// Daily at 11:10 UTC
+// Run daily at 11:10 UTC to refresh timeseries data
 cron.schedule("10 11 * * *", fetchTimeseries, { timezone: "UTC" });
 
-// Spot refresh every varF minutes
+// Refresh spot price every varF minutes
 setInterval(fetchSpot, varF * 60 * 1000);
 
 /* -----------------------------
    SHOPIFY APP PROXY ENDPOINT
 -------------------------------- */
 
+// Proxy endpoint to expose market data for frontend
 app.get("/proxy/market", (req, res) => {
   // Disable all caching (browser + Shopify CDN)
   res.setHeader(
@@ -281,6 +281,7 @@ app.get("/proxy/market", (req, res) => {
   });
 });
 
+// Proxy endpoint to expose pricing data based on quantity
 app.get("/proxy/pricing", (req, res) => {
   // Disable caching
   res.setHeader(
@@ -326,15 +327,7 @@ app.get("/proxy/pricing", (req, res) => {
    START SERVER
 -------------------------------- */
 
+// Start the backend server
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
-
-
-
-
-
-
-
-
-
