@@ -19,7 +19,7 @@ const { getPricing } = require("./pricing");
    CONFIGURATION
 -------------------------------- */
 
-// Days used for median signal
+// Days used for median signal (look-back period)
 const varE = 7;
 
 // Spot refresh frequency (minutes)
@@ -29,13 +29,14 @@ const varF = 10;
 const varH = 0.1;
 
 /* -----------------------------
-   ENVIRONMENT
+   ENVIRONMENT VARIABLES
 -------------------------------- */
 
 const API_KEY = process.env.PUBLISHER_API_KEY;
 const SHOPIFY_APP_SECRET = process.env.SHOPIFY_APP_SECRET;
 const PORT = process.env.PORT || 3000;
 
+// Ensure the API key is set, or terminate
 if (!API_KEY) {
   console.error("Missing PUBLISHER_API_KEY");
   process.exit(1);
@@ -79,74 +80,68 @@ const cache = {
   varC2Prev: null
 };
 
+// Determine whether the market is open based on time (clock-based)
 function isMarketOpenByClock(now = Date.now()) {
   return now >= cache.varMOpen && now <= cache.varMClose;
 }
 
+// Calculate market bounds: market opens Sunday 6 PM ET, closes Friday 5 PM ET
 function getWeeklyMarketBounds(now = new Date()) {
   const year = now.getUTCFullYear();
   const month = now.getUTCMonth();
   const date = now.getUTCDate();
   const day = now.getUTCDay(); // 0=Sun … 6=Sat
 
-  // Find Sunday of current week
+  // Find Sunday of the current week
   const sunday = new Date(Date.UTC(year, month, date - day));
 
   // Sunday 6:00 PM ET → market open
-  const varMOpen = toET(
-    sunday.getUTCFullYear(),
-    sunday.getUTCMonth(),
-    sunday.getUTCDate(),
-    18
-  );
+  const varMOpen = toET(sunday.getUTCFullYear(), sunday.getUTCMonth(), sunday.getUTCDate(), 18);
 
   // Friday 5:00 PM ET → market close
   const friday = new Date(sunday);
   friday.setUTCDate(friday.getUTCDate() + 5);
 
-  const varMClose = toET(
-    friday.getUTCFullYear(),
-    friday.getUTCMonth(),
-    friday.getUTCDate(),
-    17
-  );
+  const varMClose = toET(friday.getUTCFullYear(), friday.getUTCMonth(), friday.getUTCDate(), 17);
 
   return { varMOpen, varMClose };
 }
 
+// Convert to Eastern Time (ET)
 const { varMOpen, varMClose } = getWeeklyMarketBounds();
 cache.varMOpen = varMOpen;
 cache.varMClose = varMClose;
 
-cache.varMCon = isMarketOpenByClock() ? 1 : 0;
+cache.varMCon = isMarketOpenByClock() ? 1 : 0;  // Market status: 1=open, 0=closed
 
-let lastVarS = null;
-let sameCount = 0;
-let confirmCount = 0;
+let lastVarS = null; // Previous spot price
+let sameCount = 0;   // Counter for unchanged prices
+let confirmCount = 0; // Confirmation counter to detect frozen market
 
-let pollIntervalMs = varF * 60 * 1000; // current polling interval
+let pollIntervalMs = varF * 60 * 1000; // Default polling interval (10 minutes)
 let pollTimer = null;
 
-const EPS = 1e-6; // float safety
+const EPS = 1e-6; // Float safety for price comparison
 
 /* -----------------------------
    HELPERS
 -------------------------------- */
 
+// Calculate Eastern Time offset for daylight saving adjustments
 function getEasternOffset(date = new Date()) {
-  // Approximate ET offset handling (DST-safe enough for weekly bounds)
   const jan = new Date(date.getFullYear(), 0, 1);
   const jul = new Date(date.getFullYear(), 6, 1);
   return Math.max(jan.getTimezoneOffset(), jul.getTimezoneOffset());
 }
 
+// Convert UTC time to Eastern Time (ET)
 function toET(year, month, day, hour, minute = 0) {
   const d = new Date(Date.UTC(year, month, day, hour, minute));
   d.setUTCMinutes(d.getUTCMinutes() + getEasternOffset(d));
   return d.getTime();
 }
 
-/* Rounding */
+// Rounding helpers for floating point numbers
 function round2(v) {
   return Number.isFinite(v) ? Number(v.toFixed(2)) : null;
 }
@@ -165,12 +160,14 @@ function dateMinus(days) {
   return fmtDate(d);
 }
 
+// Calculate median value from an array
 function median(arr) {
   const a = arr.slice().sort((x, y) => x - y);
   const n = a.length;
   return n % 2 ? a[(n - 1) / 2] : Math.max(a[n / 2 - 1], a[n / 2]);
 }
 
+// Deduplicate consecutive identical values in an array
 function dedupeConsecutive(arr) {
   return arr.filter((v, i) => i === 0 || v !== arr[i - 1]);
 }
@@ -179,6 +176,7 @@ function dedupeConsecutive(arr) {
    SHOPIFY APP PROXY VERIFICATION
 -------------------------------- */
 
+// Verifies Shopify App Proxy request using signature
 function verifyProxy(req) {
   const { signature, ...params } = req.query;
   if (!signature) return false;
@@ -220,6 +218,7 @@ async function fetchCloseForDate(date) {
   return Number.isFinite(v) ? v : null;
 }
 
+// Fetch close price with fallback for previous days
 async function fetchCloseWithFallback(daysAgo, maxBack = 7) {
   for (let i = 0; i <= maxBack; i++) {
     const v = await fetchCloseForDate(dateMinus(daysAgo + i));
@@ -229,9 +228,7 @@ async function fetchCloseWithFallback(daysAgo, maxBack = 7) {
 }
 
 /**
- * Fetch varE-day timeseries
- * - Populate calendar-based closes (private)
- * - Compute deduplicated median signal (public)
+ * Fetch varE-day timeseries (fetches historical market data)
  */
 async function fetchTimeseries() {
   const url = new URL("https://api.metals.dev/v1/timeseries");
@@ -254,7 +251,7 @@ async function fetchTimeseries() {
     }
   }
 
-  // Sort the history by date (ascending)
+  // Sort history by date (ascending)
   HistoryLessMarketClosed.sort((a, b) => new Date(a.date) - new Date(b.date));
 
   // Track second-to-last close (e.g., Thursday's close)
@@ -268,13 +265,15 @@ async function fetchTimeseries() {
   cache.varC30 = await fetchCloseForDate(dateMinus(30));
   cache.varC365 = await fetchCloseForDate(dateMinus(365));
 
-  // Median signal
+  // Median signal (differentiated market signals)
   const ordered = HistoryLessMarketClosed.map(item => item.close);
   const trading = dedupeConsecutive(ordered);
   cache.varSm = round2(median(trading.slice(-varE)));
 }
 
-
+/**
+ * Reset the polling timer (restarts polling with new interval)
+ */
 function resetPollTimer() {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(fetchSpot, pollIntervalMs);
@@ -300,46 +299,42 @@ async function fetchSpot() {
   ({ varMOpen: cache.varMOpen, varMClose: cache.varMClose } = getWeeklyMarketBounds());
   const clockOpen = isMarketOpenByClock();
 
-  // CLOCK IS AUTHORITATIVE
+  // MARKET CLOSED LOGIC
   if (!clockOpen) {
-    cache.varMCon = 0;
+    cache.varMCon = 0; // Market closed
 
     sameCount = 0;
     confirmCount = 0;
     lastVarS = null;
   } else if (cache.varMCon === 1) {
-    // Clock says OPEN → heuristic may override
-
+    // Market OPEN – Heuristic for potential freezes (price remains same)
     if (lastVarS !== null && Math.abs(newVarS - lastVarS) < EPS) {
       sameCount++;
 
-      // 2 identical values → slow polling
+      // After 2 identical values → slow polling (2 minutes)
       if (sameCount === 2) {
-        pollIntervalMs = 2 * 60 * 1000;
+        pollIntervalMs = 2 * 60 * 1000; // Adjust polling to 2 minutes
         resetPollTimer();
       }
 
-      // count confirmations AFTER the first 2
+      // After 5 unchanged prices → assume market is frozen, reset to 10 minutes polling
       if (sameCount > 2) {
         confirmCount++;
-
-        // 2 + 5 identical → force closed
         if (confirmCount >= 5) {
-          cache.varMCon = 0;
-          pollIntervalMs = varF * 60 * 1000;
+          cache.varMCon = 0; // Mark market as closed
+          pollIntervalMs = varF * 60 * 1000; // Reset to default polling interval (10 minutes)
           resetPollTimer();
         }
       }
     } else {
-      // PRICE CHANGED
-      cache.varMCon = 1;
+      // Price changed → Market open, reset counters
+      cache.varMCon = 1; // Market open
       sameCount = 0;
       confirmCount = 0;
 
-      if (pollIntervalMs !== varF * 60 * 1000) {
-        pollIntervalMs = varF * 60 * 1000;
-        resetPollTimer();
-      }
+      // Reset polling interval to default (10 minutes)
+      pollIntervalMs = varF * 60 * 1000;
+      resetPollTimer(); // Restart polling with the new interval
     }
   }
 
@@ -347,9 +342,8 @@ async function fetchSpot() {
   cache.varS = newVarS;
   cache.varSi = round2(newVarS * varH);
 
-  // --- 1D DELTA LOGIC (AUTHORITATIVE) ---
+  // --- 1D DELTA LOGIC ---
   if (cache.varC1 && cache.varC1Prev) {
-    // Cold start OR first valid computation
     if (!cache.varCdInitialized) {
       const ref = cache.varMCon === 1
         ? cache.varC1
@@ -360,25 +354,23 @@ async function fetchSpot() {
       cache.varCdInitialized = true;
     }
 
-    // Live recompute ONLY when market is open
+    // Live recompute only when market is open
     if (cache.varMCon === 1) {
       cache.varCdSession = round2(newVarS - cache.varC1);
       cache.varCdpSession = round1((cache.varCdSession / cache.varC1) * 100);
     } else {
-      // Market closed (before 6 PM Sunday), compare to last two closes
       if (!clockOpen) {
-        const refClose = cache.varC2Prev || cache.varC1Prev; // Use last available close
-
+        const refClose = cache.varC2Prev || cache.varC1Prev;
         cache.varCdSession = round2(newVarS - refClose);
         cache.varCdpSession = round1((cache.varCdSession / refClose) * 100);
       }
     }
 
-    // Always expose last computed value
     cache.varCd = cache.varCdSession;
     cache.varCdp = cache.varCdpSession;
   }
 
+  // --- 30-Day and 365-Day Deltas ---
   if (cache.varC30) {
     cache.varCm = round2(newVarS - cache.varC30);
     cache.varCmp = round1((cache.varCm / cache.varC30) * 100);
@@ -396,16 +388,16 @@ async function fetchSpot() {
    SCHEDULING
 -------------------------------- */
 
-// Run immediately on deploy
+// Run immediately on deploy to fetch initial data
 (async () => {
   await fetchTimeseries();
   await fetchSpot();
 })();
 
-// Daily at 11:10 UTC
+// Daily at 11:10 UTC, fetch timeseries data
 cron.schedule("10 11 * * *", fetchTimeseries, { timezone: "UTC" });
 
-// Spot refresh every varF minutes
+// Spot refresh every varF minutes (default 10 minutes)
 pollIntervalMs = varF * 60 * 1000;
 pollTimer = setInterval(fetchSpot, pollIntervalMs);
 
@@ -422,11 +414,12 @@ app.get("/proxy/market", (req, res) => {
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
 
+  // Verify Shopify App Proxy signature
   if (!verifyProxy(req)) {
     return res.status(403).json({ error: "invalid proxy signature" });
   }
 
-  // UI-safe market payload
+  // UI-safe market data payload
   res.json({
      varS: cache.varS,
      varSi: cache.varSi,
@@ -448,8 +441,9 @@ app.get("/proxy/market", (req, res) => {
    });
 });
 
+// Shopify pricing proxy endpoint
 app.get("/proxy/pricing", (req, res) => {
-  // Disable caching
+  // Disable caching for pricing response
   res.setHeader(
     "Cache-Control",
     "no-store, no-cache, must-revalidate, proxy-revalidate"
@@ -457,42 +451,39 @@ app.get("/proxy/pricing", (req, res) => {
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
 
-  // Verify Shopify App Proxy
+  // Verify Shopify App Proxy signature
   if (!verifyProxy(req)) {
     return res.status(403).json({ error: "invalid proxy signature" });
   }
 
-  // Parse + validate quantity
+  // Parse and validate quantity
   const varQ = Number(req.query.varQ);
   if (!Number.isFinite(varQ) || varQ <= 0) {
     return res.status(400).json({ error: "invalid quantity" });
   }
 
-  // Optional hard cap
+  // Optional quantity hard cap
   const MAX_Q = 500;
   if (varQ > MAX_Q) {
     return res.status(400).json({ error: "quantity too large" });
   }
 
-  // Ensure required market data exists
+  // Ensure required market data is available
   if (!Number.isFinite(cache.varSm)) {
     return res.status(503).json({ error: "pricing unavailable" });
   }
 
-  // Compute pricing
+  // Compute pricing for the requested quantity
   const pricing = getPricing(cache, varQ);
   if (!pricing) {
     return res.status(503).json({ error: "pricing unavailable" });
   }
 
-  // Success
+  // Respond with pricing data
   res.json(pricing);
 });
 
-/* -----------------------------
-   START SERVER
--------------------------------- */
-
+// Start server
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
