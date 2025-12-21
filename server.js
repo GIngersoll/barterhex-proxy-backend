@@ -71,25 +71,6 @@ const cache = {
   updatedAt: null
 };
 
-const { varMOpen, varMClose } = getWeeklyMarketBounds();
-cache.varMOpen = varMOpen;
-cache.varMClose = varMClose;
-
-cache.varMCon = isMarketOpenByClock() ? 1 : 0;
-
-let lastVarS = null;
-let sameCount = 0;
-let confirmCount = 0;
-
-let pollIntervalMs = varF * 60 * 1000; // current polling interval
-let pollTimer = null;
-
-const EPS = 1e-6; // float safety
-
-/* -----------------------------
-   HELPERS
--------------------------------- */
-
 function isMarketOpenByClock(now = Date.now()) {
   return now >= cache.varMOpen && now <= cache.varMClose;
 }
@@ -124,6 +105,25 @@ function getWeeklyMarketBounds(now = new Date()) {
 
   return { varMOpen, varMClose };
 }
+
+const { varMOpen, varMClose } = getWeeklyMarketBounds();
+cache.varMOpen = varMOpen;
+cache.varMClose = varMClose;
+
+cache.varMCon = isMarketOpenByClock() ? 1 : 0;
+
+let lastVarS = null;
+let sameCount = 0;
+let confirmCount = 0;
+
+let pollIntervalMs = varF * 60 * 1000; // current polling interval
+let pollTimer = null;
+
+const EPS = 1e-6; // float safety
+
+/* -----------------------------
+   HELPERS
+-------------------------------- */
 
 function getEasternOffset(date = new Date()) {
   // Approximate ET offset handling (DST-safe enough for weekly bounds)
@@ -351,6 +351,7 @@ async function fetchSpot() {
   cache.updatedAt = new Date().toISOString();
 }
 
+
 /* -----------------------------
    SCHEDULING
 -------------------------------- */
@@ -455,3 +456,4 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
