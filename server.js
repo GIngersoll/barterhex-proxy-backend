@@ -74,6 +74,9 @@ const cache = {
   varCdSession: null,
   varCdpSession: null,
   varCdInitialized: false,
+
+  // Cache for second-to-last close (Thursday's close)
+  varC2Prev: null
 };
 
 function isMarketOpenByClock(now = Date.now()) {
@@ -270,6 +273,7 @@ async function fetchTimeseries() {
   const trading = dedupeConsecutive(ordered);
   cache.varSm = round2(median(trading.slice(-varE)));
 }
+
 
 function resetPollTimer() {
   if (pollTimer) clearInterval(pollTimer);
