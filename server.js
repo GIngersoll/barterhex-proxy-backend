@@ -71,9 +71,72 @@ const cache = {
   updatedAt: null
 };
 
+const { varMOpen, varMClose } = getWeeklyMarketBounds();
+cache.varMOpen = varMOpen;
+cache.varMClose = varMClose;
+
+cache.varMCon = isMarketOpenByClock() ? 1 : 0;
+
+let lastVarS = null;
+let sameCount = 0;
+let confirmCount = 0;
+
+let pollIntervalMs = varF * 60 * 1000; // current polling interval
+let pollTimer = null;
+
+const EPS = 1e-6; // float safety
+
 /* -----------------------------
    HELPERS
 -------------------------------- */
+
+function isMarketOpenByClock(now = Date.now()) {
+  return now >= cache.varMOpen && now <= cache.varMClose;
+}
+
+function getWeeklyMarketBounds(now = new Date()) {
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  const date = now.getUTCDate();
+  const day = now.getUTCDay(); // 0=Sun … 6=Sat
+
+  // Find Sunday of current week
+  const sunday = new Date(Date.UTC(year, month, date - day));
+
+  // Sunday 6:00 PM ET → market open
+  const varMOpen = toET(
+    sunday.getUTCFullYear(),
+    sunday.getUTCMonth(),
+    sunday.getUTCDate(),
+    18
+  );
+
+  // Friday 5:00 PM ET → market close
+  const friday = new Date(sunday);
+  friday.setUTCDate(friday.getUTCDate() + 5);
+
+  const varMClose = toET(
+    friday.getUTCFullYear(),
+    friday.getUTCMonth(),
+    friday.getUTCDate(),
+    17
+  );
+
+  return { varMOpen, varMClose };
+}
+
+function getEasternOffset(date = new Date()) {
+  // Approximate ET offset handling (DST-safe enough for weekly bounds)
+  const jan = new Date(date.getFullYear(), 0, 1);
+  const jul = new Date(date.getFullYear(), 6, 1);
+  return Math.max(jan.getTimezoneOffset(), jul.getTimezoneOffset());
+}
+
+function toET(year, month, day, hour, minute = 0) {
+  const d = new Date(Date.UTC(year, month, day, hour, minute));
+  d.setUTCMinutes(d.getUTCMinutes() + getEasternOffset(d));
+  return d.getTime();
+}
 
 /* Rounding */
 function round2(v) {
@@ -193,6 +256,11 @@ async function fetchTimeseries() {
   cache.varSm = round2(median(trading.slice(-varE)));
 }
 
+function resetPollTimer() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(fetchSpot, pollIntervalMs);
+}
+
 /**
  * Fetch live spot price and compute deltas
  */
@@ -208,21 +276,75 @@ async function fetchSpot() {
   const S = Number(data?.rate?.price);
   if (!Number.isFinite(S)) return;
 
-  cache.varS = round2(S);
-    cache.varSi = round2(S * varH);
+  const newVarS = round2(S);
+
+   ({ varMOpen: cache.varMOpen, varMClose: cache.varMClose } =
+     getWeeklyMarketBounds());
+   
+   const clockOpen = isMarketOpenByClock();
+   
+   // CLOCK IS AUTHORITATIVE
+   if (!clockOpen) {
+     cache.varMCon = 0;
+   
+     sameCount = 0;
+     confirmCount = 0;
+     lastVarS = null;
+   }
+   else if (cache.varMCon === 1) {
+   // Clock says OPEN → heuristic may override
+   
+     if (lastVarS !== null && Math.abs(newVarS - lastVarS) < EPS) {
+       sameCount++;
+   
+       // 2 identical values → slow polling
+      if (sameCount === 2) {
+         pollIntervalMs = 2 * 60 * 1000;
+      resetPollTimer();
+       }
+
+    // count confirmations AFTER the first 2
+    if (sameCount > 2) {
+      confirmCount++;
+
+      // 2 + 5 identical → force closed
+      if (confirmCount >= 5) {
+        cache.varMCon = 0;
+        pollIntervalMs = varF * 60 * 1000;
+        resetPollTimer();
+      }
+    }
+
+  } else {
+    // PRICE CHANGED
+   cache.varMCon = 1;
+        
+    sameCount = 0;
+    confirmCount = 0;
+
+    if (pollIntervalMs !== varF * 60 * 1000) {
+      pollIntervalMs = varF * 60 * 1000;
+      resetPollTimer();
+    }
+  }
+
+  lastVarS = newVarS;
+
+  cache.varS = newVarS;
+  cache.varSi = round2(newVarS * varH);
 
   if (cache.varC1) {
-    cache.varCd = round2(S - cache.varC1);
-   cache.varCdp = round1((cache.varCd / cache.varC1) * 100);
+    cache.varCd = round2(newVarS - cache.varC1);
+    cache.varCdp = round1((cache.varCd / cache.varC1) * 100);
   }
 
   if (cache.varC30) {
-    cache.varCm = round2(S - cache.varC30);
+    cache.varCm = round2(newVarS - cache.varC30);
     cache.varCmp = round1((cache.varCm / cache.varC30) * 100);
   }
 
   if (cache.varC365) {
-    cache.varCy = round2(S - cache.varC365);
+    cache.varCy = round2(newVarS - cache.varC365);
     cache.varCyp = round1((cache.varCy / cache.varC365) * 100);
   }
 
@@ -243,7 +365,8 @@ async function fetchSpot() {
 cron.schedule("10 11 * * *", fetchTimeseries, { timezone: "UTC" });
 
 // Spot refresh every varF minutes
-setInterval(fetchSpot, varF * 60 * 1000);
+pollIntervalMs = varF * 60 * 1000;
+pollTimer = setInterval(fetchSpot, pollIntervalMs);
 
 /* -----------------------------
    SHOPIFY APP PROXY ENDPOINT
@@ -264,21 +387,24 @@ app.get("/proxy/market", (req, res) => {
 
   // UI-safe market payload
   res.json({
-    varS: cache.varS,
-    varSi: cache.varSi,
-
-    varCd: cache.varCd,
-    varCdp: cache.varCdp,
-
-    varCm: cache.varCm,
-    varCmp: cache.varCmp,
-
-    varCy: cache.varCy,
-    varCyp: cache.varCyp,
-
-    varSm: cache.varSm,
-    updatedAt: cache.updatedAt
-  });
+     varS: cache.varS,
+     varSi: cache.varSi,
+   
+     varCd: cache.varCd,
+     varCdp: cache.varCdp,
+   
+     varCm: cache.varCm,
+     varCmp: cache.varCmp,
+   
+     varCy: cache.varCy,
+     varCyp: cache.varCyp,
+   
+     varSm: cache.varSm,
+   
+     varMCon: cache.varMCon,
+   
+     updatedAt: cache.updatedAt
+   });
 });
 
 app.get("/proxy/pricing", (req, res) => {
@@ -329,13 +455,3 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
-
-
-
-
-
-
-
-
-
-
