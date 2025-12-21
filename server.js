@@ -70,7 +70,7 @@ const cache = {
 
   // Last update timestamp
   updatedAt: null,
-   
+
   varCdSession: null,
   varCdpSession: null,
   varCdInitialized: false,
@@ -234,36 +234,39 @@ async function fetchTimeseries() {
   const url = new URL("https://api.metals.dev/v1/timeseries");
   url.searchParams.set("api_key", API_KEY);
   url.searchParams.set("start_date", dateMinus(varE * 2));
-  url.searchParams.set("end_date", dateMinus(1)); 
+  url.searchParams.set("end_date", dateMinus(1));
 
   const res = await fetch(url);
   const data = await res.json();
 
   const rates = data?.rates || {};
-  const closesByDate = {};
+
+  // Filter relevant market closes
+  const HistoryLessMarketClosed = [];
 
   for (const [date, obj] of Object.entries(rates)) {
     const v = Number(obj?.metals?.silver);
-    if (Number.isFinite(v)) closesByDate[date] = v;
+    if (Number.isFinite(v)) {
+      HistoryLessMarketClosed.push({ date, close: v });
+    }
   }
 
-    // Calendar-based reference closes (FETCHED INDEPENDENTLY)
+  // Sort the history by date (ascending)
+  HistoryLessMarketClosed.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-// Most recent trading close
-cache.varC1 = await fetchCloseWithFallback(1);
+  // Track second-to-last close (e.g., Thursday's close)
+  if (HistoryLessMarketClosed.length >= 2) {
+    cache.varC2Prev = HistoryLessMarketClosed[HistoryLessMarketClosed.length - 2].close;
+  }
 
-// Prior trading close (used when market is closed)
-cache.varC1Prev = await fetchCloseWithFallback(2);
+  // Set the most recent and previous close
+  cache.varC1 = await fetchCloseWithFallback(1);  // Most recent trading close
+  cache.varC1Prev = HistoryLessMarketClosed[HistoryLessMarketClosed.length - 1]?.close || null; // Last close
+  cache.varC30 = await fetchCloseForDate(dateMinus(30));
+  cache.varC365 = await fetchCloseForDate(dateMinus(365));
 
-// Longer horizons
-cache.varC30  = await fetchCloseForDate(dateMinus(30));
-cache.varC365 = await fetchCloseForDate(dateMinus(365));
-
-  // Deduplicated trading closes → median signal
-  const ordered = Object.keys(closesByDate)
-    .sort()
-    .map((d) => closesByDate[d]);
-
+  // Median signal
+  const ordered = HistoryLessMarketClosed.map(item => item.close);
   const trading = dedupeConsecutive(ordered);
   cache.varSm = round2(median(trading.slice(-varE)));
 }
@@ -290,88 +293,87 @@ async function fetchSpot() {
 
   const newVarS = round2(S);
 
-   ({ varMOpen: cache.varMOpen, varMClose: cache.varMClose } =
-     getWeeklyMarketBounds());
-   
-   const clockOpen = isMarketOpenByClock();
-   
-   // CLOCK IS AUTHORITATIVE
-   if (!clockOpen) {
-     cache.varMCon = 0;
-   
-     sameCount = 0;
-     confirmCount = 0;
-     lastVarS = null;
-   }
-   else if (cache.varMCon === 1) {
-   // Clock says OPEN → heuristic may override
-   
-     if (lastVarS !== null && Math.abs(newVarS - lastVarS) < EPS) {
-       sameCount++;
-   
-       // 2 identical values → slow polling
+  ({ varMOpen: cache.varMOpen, varMClose: cache.varMClose } = getWeeklyMarketBounds());
+  const clockOpen = isMarketOpenByClock();
+
+  // CLOCK IS AUTHORITATIVE
+  if (!clockOpen) {
+    cache.varMCon = 0;
+
+    sameCount = 0;
+    confirmCount = 0;
+    lastVarS = null;
+  } else if (cache.varMCon === 1) {
+    // Clock says OPEN → heuristic may override
+
+    if (lastVarS !== null && Math.abs(newVarS - lastVarS) < EPS) {
+      sameCount++;
+
+      // 2 identical values → slow polling
       if (sameCount === 2) {
-         pollIntervalMs = 2 * 60 * 1000;
-      resetPollTimer();
-       }
+        pollIntervalMs = 2 * 60 * 1000;
+        resetPollTimer();
+      }
 
-    // count confirmations AFTER the first 2
-    if (sameCount > 2) {
-      confirmCount++;
+      // count confirmations AFTER the first 2
+      if (sameCount > 2) {
+        confirmCount++;
 
-      // 2 + 5 identical → force closed
-      if (confirmCount >= 5) {
-        cache.varMCon = 0;
+        // 2 + 5 identical → force closed
+        if (confirmCount >= 5) {
+          cache.varMCon = 0;
+          pollIntervalMs = varF * 60 * 1000;
+          resetPollTimer();
+        }
+      }
+    } else {
+      // PRICE CHANGED
+      cache.varMCon = 1;
+      sameCount = 0;
+      confirmCount = 0;
+
+      if (pollIntervalMs !== varF * 60 * 1000) {
         pollIntervalMs = varF * 60 * 1000;
         resetPollTimer();
       }
     }
-
-  } else {
-    // PRICE CHANGED
-        
-   cache.varMCon = 1;
-        
-    sameCount = 0;
-    confirmCount = 0;
-
-    if (pollIntervalMs !== varF * 60 * 1000) {
-      pollIntervalMs = varF * 60 * 1000;
-      resetPollTimer();
-    }
   }
-}
 
   lastVarS = newVarS;
-
   cache.varS = newVarS;
   cache.varSi = round2(newVarS * varH);
 
   // --- 1D DELTA LOGIC (AUTHORITATIVE) ---
   if (cache.varC1 && cache.varC1Prev) {
-
-     // Cold start OR first valid computation
-     if (!cache.varCdInitialized) {
-        const ref = cache.varMCon === 1
+    // Cold start OR first valid computation
+    if (!cache.varCdInitialized) {
+      const ref = cache.varMCon === 1
         ? cache.varC1
         : cache.varC1Prev;
 
-         cache.varCdSession  = round2(newVarS - ref);
-         cache.varCdpSession = round1((cache.varCdSession / ref) * 100);
-         cache.varCdInitialized = true;
-     }
+      cache.varCdSession = round2(newVarS - ref);
+      cache.varCdpSession = round1((cache.varCdSession / ref) * 100);
+      cache.varCdInitialized = true;
+    }
 
-     // Live recompute ONLY when market is open
-     if (cache.varMCon === 1) {
-         cache.varCdSession  = round2(newVarS - cache.varC1);
-         cache.varCdpSession = round1((cache.varCdSession / cache.varC1) * 100);
-     }
+    // Live recompute ONLY when market is open
+    if (cache.varMCon === 1) {
+      cache.varCdSession = round2(newVarS - cache.varC1);
+      cache.varCdpSession = round1((cache.varCdSession / cache.varC1) * 100);
+    } else {
+      // Market closed (before 6 PM Sunday), compare to last two closes
+      if (!clockOpen) {
+        const refClose = cache.varC2Prev || cache.varC1Prev; // Use last available close
 
-     // Always expose last computed value
-     cache.varCd  = cache.varCdSession;
-     cache.varCdp = cache.varCdpSession;
+        cache.varCdSession = round2(newVarS - refClose);
+        cache.varCdpSession = round1((cache.varCdSession / refClose) * 100);
+      }
+    }
+
+    // Always expose last computed value
+    cache.varCd = cache.varCdSession;
+    cache.varCdp = cache.varCdpSession;
   }
-
 
   if (cache.varC30) {
     cache.varCm = round2(newVarS - cache.varC30);
@@ -385,7 +387,6 @@ async function fetchSpot() {
 
   cache.updatedAt = new Date().toISOString();
 }
-
 
 /* -----------------------------
    SCHEDULING
@@ -491,11 +492,3 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
-
-
-
-
-
-
-
-
