@@ -19,7 +19,7 @@ const { getPricing } = require("./pricing");
    CONFIGURATION
 -------------------------------- */
 
-// Days used for median signal
+// Previous trading days used for median signal. Max 20
 const varE = 7;
 
 // Spot refresh frequency (minutes)
@@ -193,7 +193,7 @@ async function fetchCloseForDate(date) {
 async function fetchTimeseries() {
   const url = new URL("https://api.metals.dev/v1/timeseries");
   url.searchParams.set("api_key", API_KEY);
-  url.searchParams.set("start_date", dateMinus(varE * 2));
+  url.searchParams.set("start_date", dateMinus(varE + 10));
   url.searchParams.set("end_date", dateMinus(1)); 
 
   const res = await fetch(url);
@@ -207,28 +207,34 @@ async function fetchTimeseries() {
     if (Number.isFinite(v)) closesByDate[date] = v;
   }
 
-  // Calendar-based reference closes (FETCHED INDEPENDENTLY)
-  cache.varC1 = await fetchCloseForDate(dateMinus(1));  // Fetch data for 1 day ago
-
-  // Log the fetched value to check if it's valid
-   console.log("Fetched varC1:", cache.varC1);
-
-  // Check if varC1 is a valid number
-  if (Number.isFinite(cache.varC1)) {
-  console.log("varC1 is valid:", cache.varC1);
-  } else {
-  console.log("varC1 is invalid or null");
-  }
-   
-  cache.varC30 = await fetchCloseForDate(dateMinus(30));  // Fetch data for 30 days ago
-  cache.varC365 = await fetchCloseForDate(dateMinus(365));  // Fetch data for 365 days ago
-
-  // Deduplicated trading closes → median signal
+  // Pre-deduplication: This array will include all the fetched close values.
   const ordered = Object.keys(closesByDate)
     .sort()
     .map((d) => closesByDate[d]);
 
+  // Deduplication
   const trading = dedupeConsecutive(ordered);
+
+  // Now, instead of just using the previous day's close for varC1, we find the most recent close that doesn't match varS
+  let foundValidC1 = false;
+  for (let i = trading.length - 1; i >= 0; i--) {
+    if (trading[i] !== cache.varS) {
+      cache.varC1 = trading[i]; // Use this close as varC1
+      foundValidC1 = true;
+      break;
+    }
+  }
+
+  // If no valid C1 is found (which should be rare if varS isn't the same as the close), fall back to previous day's close
+  if (!foundValidC1) {
+    cache.varC1 = trading[trading.length - 1]; // Fallback to the last close if no different value is found
+  }
+
+  // Longer horizons (no special handling needed)
+  cache.varC30 = await fetchCloseForDate(dateMinus(30));  // Fetch data for 30 days ago
+  cache.varC365 = await fetchCloseForDate(dateMinus(365));  // Fetch data for 365 days ago
+
+  // Deduplicated trading closes → median signal
   cache.varSm = round2(median(trading.slice(-varE)));
 }
 
@@ -331,8 +337,8 @@ function getMarketStatus() {
 
 // Run immediately on deploy to fetch initial market data
 (async () => {
-  await fetchTimeseries();
   await fetchSpot();
+  await fetchTimeseries();
 })();
 
 // Run daily at 6:10 Eastern Time to refresh timeseries data
@@ -429,6 +435,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
