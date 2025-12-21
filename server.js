@@ -346,6 +346,7 @@ function getMarketStatus() {
 (async () => {
   await fetchSpot();
   await fetchTimeseries();
+  await fetchSpot();
 })();
 
 // Run daily at 6:10 Eastern Time to refresh timeseries data
@@ -442,6 +443,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
