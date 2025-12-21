@@ -28,57 +28,27 @@ const varF = 10;
 // Troy ounces per token
 const varH = 0.1;
 
-// Define constants for the weekly schedule (recurring every week)
-
-// Market opening time: 6:00 PM Sunday
+// Market opening and closing times (user-defined, in human-readable format)
 const varMOpen = new Date();
-varMOpen.setHours(18, 0, 0, 0); // Set to 6:00 PM Sunday
-varMOpen.setDate(varMOpen.getDate() + (7 - varMOpen.getDay()) % 7); // Always Sunday at 6 PM
+varMOpen.setHours(18, 0, 0, 0); // Market opens at 6:00 PM on Sunday
 
-// Market closing time: 5:00 PM Friday
 const varMClose = new Date();
-varMClose.setHours(17, 0, 0, 0); // Set to 5:00 PM Friday
-varMClose.setDate(varMClose.getDate() + (5 - varMClose.getDay() + 7) % 7); // Always Friday at 5 PM
+varMClose.setHours(17, 0, 0, 0); // Market closes at 5:00 PM on Friday
 
-// Define break and off-break times for Monday to Thursday
-
-// Market goes on break at 5:00 PM Monday through Thursday
-function getMOnBreakForDay(dayOfWeek) {
-  const breakTime = new Date();
-  breakTime.setHours(17, 0, 0, 0); // Set to 5:00 PM
-  breakTime.setDate(breakTime.getDate() + (dayOfWeek - breakTime.getDay() + 7) % 7); // Adjust to correct day of the week (Mon-Thurs)
-  return breakTime;
-}
-
-// Market comes off break at 6:00 PM Monday through Thursday
-function getMOffBreakForDay(dayOfWeek) {
-  const offBreakTime = new Date();
-  offBreakTime.setHours(18, 0, 0, 0); // Set to 6:00 PM
-  offBreakTime.setDate(offBreakTime.getDate() + (dayOfWeek - offBreakTime.getDay() + 7) % 7); // Adjust to correct day of the week (Mon-Thurs)
-  return offBreakTime;
-}
-
-// Set varMOnBreak for Monday through Thursday
+// Break start and end times (Monday to Thursday)
 const varMOnBreak = [
-  getMOnBreakForDay(1), // Monday at 5:00 PM
-  getMOnBreakForDay(2), // Tuesday at 5:00 PM
-  getMOnBreakForDay(3), // Wednesday at 5:00 PM
-  getMOnBreakForDay(4)  // Thursday at 5:00 PM
+  new Date().setHours(17, 0, 0, 0), // Monday break start at 5:00 PM
+  new Date().setHours(17, 0, 0, 0), // Tuesday break start at 5:00 PM
+  new Date().setHours(17, 0, 0, 0), // Wednesday break start at 5:00 PM
+  new Date().setHours(17, 0, 0, 0), // Thursday break start at 5:00 PM
 ];
 
-// Set varMOffBreak for Monday through Thursday
 const varMOffBreak = [
-  getMOffBreakForDay(1), // Monday at 6:00 PM
-  getMOffBreakForDay(2), // Tuesday at 6:00 PM
-  getMOffBreakForDay(3), // Wednesday at 6:00 PM
-  getMOffBreakForDay(4)  // Thursday at 6:00 PM
+  new Date().setHours(18, 0, 0, 0), // Monday break end at 6:00 PM
+  new Date().setHours(18, 0, 0, 0), // Tuesday break end at 6:00 PM
+  new Date().setHours(18, 0, 0, 0), // Wednesday break end at 6:00 PM
+  new Date().setHours(18, 0, 0, 0), // Thursday break end at 6:00 PM
 ];
-
-// Log these values to confirm the recurring schedule
-console.log('Market Open:', varMOpen);
-console.log('Market Close:', varMClose);
-console.log('Market On Break (Mon-Thurs):', varMOnBreak);
-console.log('Market Off Break (Mon-Thurs):', varMOffBreak);
 
 /* -----------------------------
    ENVIRONMENT
@@ -237,15 +207,15 @@ async function fetchTimeseries() {
   // Calendar-based reference closes (FETCHED INDEPENDENTLY)
   cache.varC1 = await fetchCloseForDate(dateMinus(1));  // Fetch data for 1 day ago
 
-   // Log the fetched value to check if it's valid
-console.log("Fetched varC1:", cache.varC1);
+  // Log the fetched value to check if it's valid
+   console.log("Fetched varC1:", cache.varC1);
 
-// Check if varC1 is a valid number
-if (Number.isFinite(cache.varC1)) {
+  // Check if varC1 is a valid number
+  if (Number.isFinite(cache.varC1)) {
   console.log("varC1 is valid:", cache.varC1);
-} else {
+  } else {
   console.log("varC1 is invalid or null");
-}
+  }
    
   cache.varC30 = await fetchCloseForDate(dateMinus(30));  // Fetch data for 30 days ago
   cache.varC365 = await fetchCloseForDate(dateMinus(365));  // Fetch data for 365 days ago
@@ -310,43 +280,37 @@ function getMarketStatus() {
   const now = new Date();
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
+  const dayOfWeek = now.getDay();  // 0 = Sunday, 6 = Saturday
+  
+  // Check if it's Monday to Thursday and between the break times
+  if (dayOfWeek >= 1 && dayOfWeek <= 4) {
+    const breakStart = varMOnBreak[dayOfWeek - 1];  // Break start for current day
+    const breakEnd = varMOffBreak[dayOfWeek - 1];   // Break end for current day
 
-  // Get current day (0 = Sunday, 6 = Saturday)
-  const dayOfWeek = now.getDay();
-
-  // Check if it's the weekend (closed)
-  if (dayOfWeek === 0 || dayOfWeek === 6) {
-    return 0; // Market is closed on weekends
-  }
-
-  // Check for market holidays (you can add specific dates here)
-  // Example: Market is closed on Christmas (Dec 25)
-  const month = now.getMonth(); // 0-based month
-  const date = now.getDate();
-
-  if ((month === 11 && date === 25)) {
-    return 3; // Market closed for a holiday (e.g., Christmas)
-  }
-
-  // Define market hours: 9:30 AM to 4:00 PM
-  const marketOpenHour = 9; // 9:30 AM
-  const marketCloseHour = 16; // 4:00 PM
-
-  // Market Break (Lunch Break): 12:00 PM to 1:00 PM
-  const lunchBreakStart = 12;
-  const lunchBreakEnd = 13;
-
-  // Check if market is open
-  if (currentHour >= marketOpenHour && currentHour < marketCloseHour) {
-    // Check if we are in the lunch break window
-    if (currentHour === lunchBreakStart && currentMinute >= 0 && currentMinute < 60) {
+    if (now >= breakStart && now < breakEnd) {
       return 2; // Market is on break (lunch)
     }
     return 1; // Market is open
   }
 
-  // If it's outside of market hours (before 9:30 AM or after 4:00 PM)
-  return 0; // Market is closed
+  // Check if it's Friday and after market close time
+  if (dayOfWeek === 5) {
+    if (now >= varMClose) {
+      return 0; // Market is closed after market close time on Friday
+    }
+    return 1; // Market is open on Friday before close time
+  }
+
+  // Check if it's Sunday and after market open time
+  if (dayOfWeek === 0) {
+    if (now >= varMOpen) {
+      return 1; // Market is open after market open time on Sunday
+    }
+    return 0; // Market is closed on Sunday before open time
+  }
+
+  // Check for Saturday (market is closed)
+  return 0; // Market is closed on Saturday
 }
 
 /* -----------------------------
@@ -425,7 +389,7 @@ app.get("/proxy/pricing", (req, res) => {
   }
 
   // Optional hard cap
-  const MAX_Q = 500;
+  const MAX_Q = 100;
   if (varQ > MAX_Q) {
     return res.status(400).json({ error: "quantity too large" });
   }
@@ -453,5 +417,6 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
