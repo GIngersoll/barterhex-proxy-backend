@@ -347,9 +347,9 @@ async function fetchSpot() {
     if (!cache.varCdInitialized) {
       const ref = cache.varMCon === 1
         ? cache.varC1
-        : cache.varC1Prev;
+        : cache.varC1Prev;  // Use last valid close (varC1Prev)
 
-      cache.varCdSession = round2(newVarS - ref);
+      cache.varCdSession = round2(newVarS - ref);  // Compare varS with varC1Prev during closure
       cache.varCdpSession = round1((cache.varCdSession / ref) * 100);
       cache.varCdInitialized = true;
     }
@@ -359,10 +359,11 @@ async function fetchSpot() {
       cache.varCdSession = round2(newVarS - cache.varC1);
       cache.varCdpSession = round1((cache.varCdSession / cache.varC1) * 100);
     } else {
+      // If market is closed, compare varS to the last valid close (varC1Prev or varC2Prev)
       if (!clockOpen) {
-        const refClose = cache.varC2Prev || cache.varC1Prev;
-        cache.varCdSession = round2(newVarS - refClose);
-        cache.varCdpSession = round1((cache.varCdSession / refClose) * 100);
+        const refClose = cache.varC1Prev;  // Use the last close (varC1Prev)
+        cache.varCdSession = round2(newVarS - refClose);      // Calculate delta using varS and varC1Prev
+        cache.varCdpSession = round1((cache.varCdSession / refClose) * 100);  // Calculate percentage delta
       }
     }
 
@@ -372,17 +373,18 @@ async function fetchSpot() {
 
   // --- 30-Day and 365-Day Deltas ---
   if (cache.varC30) {
-    cache.varCm = round2(newVarS - cache.varC30);
-    cache.varCmp = round1((cache.varCm / cache.varC30) * 100);
+    cache.varCm = round2(newVarS - cache.varC30);  // 30-day delta
+    cache.varCmp = round1((cache.varCm / cache.varC30) * 100);  // 30-day percentage delta
   }
 
   if (cache.varC365) {
-    cache.varCy = round2(newVarS - cache.varC365);
-    cache.varCyp = round1((cache.varCy / cache.varC365) * 100);
+    cache.varCy = round2(newVarS - cache.varC365);  // 365-day delta
+    cache.varCyp = round1((cache.varCy / cache.varC365) * 100);  // 365-day percentage delta
   }
 
-  cache.updatedAt = new Date().toISOString();
+  cache.updatedAt = new Date().toISOString(); // Timestamp of the latest update
 }
+
 
 /* -----------------------------
    SCHEDULING
@@ -487,3 +489,4 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
