@@ -150,6 +150,9 @@ async function fetchCloseForDate(date) {
   const res = await fetch(url);
   const data = await res.json();
 
+  // Log the raw response data for debugging
+  console.log("API Response:", data);
+
   const day = Object.values(data?.rates || {})[0];
   const v = Number(day?.metals?.silver);
   return Number.isFinite(v) ? v : null;
@@ -342,3 +345,4 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
