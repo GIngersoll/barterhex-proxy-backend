@@ -160,6 +160,34 @@ function verifyProxy(req) {
   );
 }
 
+function calculateDeltas() {
+  // Ensure required values are available
+  if (cache.varS && cache.varC1 && cache.varC30 && cache.varC365) {
+    const S = cache.varS;
+    const C1 = cache.varC1;
+    const C30 = cache.varC30;
+    const C365 = cache.varC365;
+
+    // Calculate deltas
+    cache.varCd = round2(S - C1);
+    cache.varCdp = round1((cache.varCd / C1) * 100);
+
+    cache.varCm = round2(S - C30);
+    cache.varCmp = round1((cache.varCm / C30) * 100);
+
+    cache.varCy = round2(S - C365);
+    cache.varCyp = round1((cache.varCy / C365) * 100);
+
+    // Log results for debugging
+    console.log("Deltas calculated:");
+    console.log("varCd:", cache.varCd, "varCdp:", cache.varCdp);
+    console.log("varCm:", cache.varCm, "varCmp:", cache.varCmp);
+    console.log("varCy:", cache.varCy, "varCyp:", cache.varCyp);
+  } else {
+    console.log("Missing values for delta calculation. Waiting for missing data...");
+  }
+}
+
 /* -----------------------------
    DATA FETCHERS
 -------------------------------- */
@@ -238,6 +266,9 @@ async function fetchTimeseries() {
   console.log("Fetched varC30:", cache.varC30);
   console.log("Fetched varC365:", cache.varC365);
 
+   // Trigger delta calculation after fetching all historic close values
+  calculateDeltas();
+
   // Deduplicated trading closes → median signal
   cache.varSm = round2(median(trading.slice(-varE)));
 }
@@ -268,20 +299,8 @@ async function fetchSpot() {
   // You can log the market status for debugging or display purposes
   console.log("Updated Market Status:", varMStatus);
    
-  if (cache.varC1) {
-    cache.varCd = round2(S - cache.varC1);
-    cache.varCdp = round1((cache.varCd / cache.varC1) * 100);
-  }
-
-  if (cache.varC30) {
-    cache.varCm = round2(S - cache.varC30);
-    cache.varCmp = round1((cache.varCm / cache.varC30) * 100);
-  }
-
-  if (cache.varC365) {
-    cache.varCy = round2(S - cache.varC365);
-    cache.varCyp = round1((cache.varCy / cache.varC365) * 100);
-  }
+  // Call delta calculation after fetching spot price
+  calculateDeltas();
    
   cache.varS = round2(S);
   cache.varSi = round2(S * varH);
@@ -346,7 +365,6 @@ function getMarketStatus() {
 (async () => {
   await fetchSpot();
   await fetchTimeseries();
-  await fetchSpot();
 })();
 
 // Run daily at 6:10 Eastern Time to refresh timeseries data
@@ -443,6 +461,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
