@@ -91,9 +91,11 @@ function fmtDate(d) {
 
 /* Date manipulation */
 function dateMinus(days) {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - days);
-  return fmtDate(d);
+  const date = new Date();
+  // Set the date to Eastern Time (ET)
+  const easternTime = new Date(date.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  easternTime.setDate(easternTime.getDate() - days);
+  return easternTime.toISOString().slice(0, 10);  // Returns date in "YYYY-MM-DD" format
 }
 
 /* Median calculation for deduplicated signal */
@@ -253,7 +255,7 @@ async function fetchSpot() {
 })();
 
 // Run daily at 11:10 UTC to refresh timeseries data
-cron.schedule("10 11 * * *", fetchTimeseries, { timezone: "UTC" });
+cron.schedule("10 6 * * *", fetchTimeseries, { timezone: "America/New_York" });
 
 // Refresh spot price every varF minutes
 setInterval(fetchSpot, varF * 60 * 1000);
