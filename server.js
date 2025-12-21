@@ -28,6 +28,58 @@ const varF = 10;
 // Troy ounces per token
 const varH = 0.1;
 
+// Define constants for the weekly schedule (recurring every week)
+
+// Market opening time: 6:00 PM Sunday
+const varMOpen = new Date();
+varMOpen.setHours(18, 0, 0, 0); // Set to 6:00 PM Sunday
+varMOpen.setDate(varMOpen.getDate() + (7 - varMOpen.getDay()) % 7); // Always Sunday at 6 PM
+
+// Market closing time: 5:00 PM Friday
+const varMClose = new Date();
+varMClose.setHours(17, 0, 0, 0); // Set to 5:00 PM Friday
+varMClose.setDate(varMClose.getDate() + (5 - varMClose.getDay() + 7) % 7); // Always Friday at 5 PM
+
+// Define break and off-break times for Monday to Thursday
+
+// Market goes on break at 5:00 PM Monday through Thursday
+function getMOnBreakForDay(dayOfWeek) {
+  const breakTime = new Date();
+  breakTime.setHours(17, 0, 0, 0); // Set to 5:00 PM
+  breakTime.setDate(breakTime.getDate() + (dayOfWeek - breakTime.getDay() + 7) % 7); // Adjust to correct day of the week (Mon-Thurs)
+  return breakTime;
+}
+
+// Market comes off break at 6:00 PM Monday through Thursday
+function getMOffBreakForDay(dayOfWeek) {
+  const offBreakTime = new Date();
+  offBreakTime.setHours(18, 0, 0, 0); // Set to 6:00 PM
+  offBreakTime.setDate(offBreakTime.getDate() + (dayOfWeek - offBreakTime.getDay() + 7) % 7); // Adjust to correct day of the week (Mon-Thurs)
+  return offBreakTime;
+}
+
+// Set varMOnBreak for Monday through Thursday
+const varMOnBreak = [
+  getMOnBreakForDay(1), // Monday at 5:00 PM
+  getMOnBreakForDay(2), // Tuesday at 5:00 PM
+  getMOnBreakForDay(3), // Wednesday at 5:00 PM
+  getMOnBreakForDay(4)  // Thursday at 5:00 PM
+];
+
+// Set varMOffBreak for Monday through Thursday
+const varMOffBreak = [
+  getMOffBreakForDay(1), // Monday at 6:00 PM
+  getMOffBreakForDay(2), // Tuesday at 6:00 PM
+  getMOffBreakForDay(3), // Wednesday at 6:00 PM
+  getMOffBreakForDay(4)  // Thursday at 6:00 PM
+];
+
+// Log these values to confirm the recurring schedule
+console.log('Market Open:', varMOpen);
+console.log('Market Close:', varMClose);
+console.log('Market On Break (Mon-Thurs):', varMOnBreak);
+console.log('Market Off Break (Mon-Thurs):', varMOffBreak);
+
 /* -----------------------------
    ENVIRONMENT
 -------------------------------- */
@@ -211,6 +263,7 @@ if (Number.isFinite(cache.varC1)) {
  * Fetch live spot price and compute deltas
  * This gets the current silver spot price and computes changes relative to the cached reference closes
  */
+
 async function fetchSpot() {
   const url = new URL("https://api.metals.dev/v1/metal/spot");
   url.searchParams.set("api_key", API_KEY);
@@ -223,9 +276,12 @@ async function fetchSpot() {
   const S = Number(data?.rate?.price);
   if (!Number.isFinite(S)) return;
 
-  cache.varS = round2(S);
-  cache.varSi = round2(S * varH);
+  // Set the global market status variable based on Eastern Time
+  const varMStatus = getMarketStatus();
 
+  // You can log the market status for debugging or display purposes
+  console.log("Updated Market Status:", varMStatus);
+   
   if (cache.varC1) {
     cache.varCd = round2(S - cache.varC1);
     cache.varCdp = round1((cache.varCd / cache.varC1) * 100);
@@ -240,8 +296,57 @@ async function fetchSpot() {
     cache.varCy = round2(S - cache.varC365);
     cache.varCyp = round1((cache.varCy / cache.varC365) * 100);
   }
-
+   
+  cache.varS = round2(S);
+  cache.varSi = round2(S * varH);
+  cache.varMStatus = varMStatus;
+   
   cache.updatedAt = new Date().toISOString();
+}
+
+const varMstat = getMarketStatus();
+
+function getMarketStatus() {
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+
+  // Get current day (0 = Sunday, 6 = Saturday)
+  const dayOfWeek = now.getDay();
+
+  // Check if it's the weekend (closed)
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
+    return 0; // Market is closed on weekends
+  }
+
+  // Check for market holidays (you can add specific dates here)
+  // Example: Market is closed on Christmas (Dec 25)
+  const month = now.getMonth(); // 0-based month
+  const date = now.getDate();
+
+  if ((month === 11 && date === 25)) {
+    return 3; // Market closed for a holiday (e.g., Christmas)
+  }
+
+  // Define market hours: 9:30 AM to 4:00 PM
+  const marketOpenHour = 9; // 9:30 AM
+  const marketCloseHour = 16; // 4:00 PM
+
+  // Market Break (Lunch Break): 12:00 PM to 1:00 PM
+  const lunchBreakStart = 12;
+  const lunchBreakEnd = 13;
+
+  // Check if market is open
+  if (currentHour >= marketOpenHour && currentHour < marketCloseHour) {
+    // Check if we are in the lunch break window
+    if (currentHour === lunchBreakStart && currentMinute >= 0 && currentMinute < 60) {
+      return 2; // Market is on break (lunch)
+    }
+    return 1; // Market is open
+  }
+
+  // If it's outside of market hours (before 9:30 AM or after 4:00 PM)
+  return 0; // Market is closed
 }
 
 /* -----------------------------
@@ -254,7 +359,7 @@ async function fetchSpot() {
   await fetchSpot();
 })();
 
-// Run daily at 11:10 UTC to refresh timeseries data
+// Run daily at 6:10 Eastern Time to refresh timeseries data
 cron.schedule("10 6 * * *", fetchTimeseries, { timezone: "America/New_York" });
 
 // Refresh spot price every varF minutes
@@ -293,6 +398,7 @@ app.get("/proxy/market", (req, res) => {
     varCyp: cache.varCyp,
 
     varSm: cache.varSm,
+    updatedAt: cache.updatedAt,
     updatedAt: cache.updatedAt
   });
 });
@@ -347,4 +453,5 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
