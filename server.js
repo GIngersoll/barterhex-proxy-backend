@@ -257,13 +257,10 @@ async function fetchSpot() {
   const data = await res.json();
 
   const S = Number(data?.rate?.price);
-   
-  // if (!Number.isFinite(S)) return;
 
-  if (!Number.isFinite(S)) {
-    console.error("Failed to fetch valid spot price (varS)");
-    return;
-  }
+  console.log("Current spot price (S):", S);
+   
+  if (!Number.isFinite(S)) return;
 
   // Set the global market status variable based on Eastern Time
   const varMStatus = getMarketStatus();
@@ -445,6 +442,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
