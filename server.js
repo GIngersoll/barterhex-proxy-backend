@@ -69,7 +69,10 @@ const cache = {
   varSm: null,
 
   // Last update timestamp
-  updatedAt: null
+  updatedAt: null,
+   
+  varCdSession: null,
+  varCdpSession: null,
 };
 
 function isMarketOpenByClock(now = Date.now()) {
@@ -344,14 +347,19 @@ async function fetchSpot() {
   cache.varSi = round2(newVarS * varH);
 
   if (cache.varC1) {
-     const refClose =
-        cache.varMCon === 0 && cache.varC1Prev
-        ? cache.varC1Prev
-        : cache.varC1;
+  if (cache.varMCon === 1) {
+    // Market open → recompute session delta
+    const refClose = cache.varC1;
 
-     cache.varCd = round2(newVarS - refClose);
-     cache.varCdp = round1((cache.varCd / refClose) * 100);
-   }
+    cache.varCdSession = round2(newVarS - refClose);
+    cache.varCdpSession = round1((cache.varCdSession / refClose) * 100);
+  }
+
+  // Always expose last valid session delta
+  cache.varCd = cache.varCdSession;
+  cache.varCdp = cache.varCdpSession;
+}
+
 
 
   if (cache.varC30) {
@@ -472,6 +480,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
