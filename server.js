@@ -234,6 +234,10 @@ async function fetchTimeseries() {
   cache.varC30 = await fetchCloseForDate(dateMinus(30));  // Fetch data for 30 days ago
   cache.varC365 = await fetchCloseForDate(dateMinus(365));  // Fetch data for 365 days ago
 
+  console.log("Fetched varC1:", cache.varC1);
+  console.log("Fetched varC30:", cache.varC30);
+  console.log("Fetched varC365:", cache.varC365);
+
   // Deduplicated trading closes → median signal
   cache.varSm = round2(median(trading.slice(-varE)));
 }
@@ -254,6 +258,8 @@ async function fetchSpot() {
 
   const S = Number(data?.rate?.price);
   if (!Number.isFinite(S)) return;
+
+  console.log("Fetched SPOT:", const S);
 
   // Set the global market status variable based on Eastern Time
   const varMStatus = getMarketStatus();
@@ -435,6 +441,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
