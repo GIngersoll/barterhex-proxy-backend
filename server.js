@@ -275,6 +275,9 @@ async function fetchSpot() {
   cache.varMStatus = varMStatus;
    
   cache.updatedAt = new Date().toISOString();
+
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
   console.log('Today is day number:', dayOfWeek);
 }
 
@@ -421,6 +424,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
