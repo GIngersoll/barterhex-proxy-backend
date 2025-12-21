@@ -244,19 +244,16 @@ async function fetchTimeseries() {
   }
 
     // Calendar-based reference closes (FETCHED INDEPENDENTLY)
-    // 1-day close with previous-session tracking
-   const newC1 = await fetchCloseWithFallback(1);
 
-   if (cache.varC1 !== null && newC1 !== null && newC1 !== cache.varC1) {
-     // Trading close advanced → shift previous close
-     cache.varC1Prev = cache.varC1;
-   }
+// Most recent trading close
+cache.varC1 = await fetchCloseWithFallback(1);
 
-   cache.varC1 = newC1;
+// Prior trading close (used when market is closed)
+cache.varC1Prev = await fetchCloseWithFallback(2);
 
-   // Longer horizons (no special handling needed)
-   cache.varC30  = await fetchCloseForDate(dateMinus(30));
-   cache.varC365 = await fetchCloseForDate(dateMinus(365));
+// Longer horizons
+cache.varC30  = await fetchCloseForDate(dateMinus(30));
+cache.varC365 = await fetchCloseForDate(dateMinus(365));
 
   // Deduplicated trading closes → median signal
   const ordered = Object.keys(closesByDate)
@@ -328,9 +325,6 @@ async function fetchSpot() {
 
   } else {
     // PRICE CHANGED
-   if (cache.varC1) {
-    cache.varC1Frozen = cache.varC1;
-   }
         
    cache.varMCon = 1;
         
@@ -351,9 +345,9 @@ async function fetchSpot() {
 
   if (cache.varC1) {
      const refClose =
-     cache.varMCon === 0 && cache.varC1Frozen
-     ? cache.varC1Frozen   // closed market: last-change reference
-     : cache.varC1;        // open market: last trading close
+        cache.varMCon === 0 && cache.varC1Prev
+        ? cache.varC1Prev
+        : cache.varC1;
 
      cache.varCd = round2(newVarS - refClose);
      cache.varCdp = round1((cache.varCd / refClose) * 100);
@@ -478,6 +472,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
