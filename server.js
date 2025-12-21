@@ -73,6 +73,7 @@ const cache = {
    
   varCdSession: null,
   varCdpSession: null,
+  varCdInitialized: false,
 };
 
 function isMarketOpenByClock(now = Date.now()) {
@@ -346,28 +347,31 @@ async function fetchSpot() {
   cache.varS = newVarS;
   cache.varSi = round2(newVarS * varH);
 
+  // --- 1D DELTA LOGIC (AUTHORITATIVE) ---
   if (cache.varC1 && cache.varC1Prev) {
 
-  // Compute once if missing (e.g. after deploy)
-  if (cache.varCdSession === null || cache.varCdpSession === null) {
-    const refClose = cache.varC1Prev;
+     // Cold start OR first valid computation
+     if (!cache.varCdInitialized) {
+        const ref = cache.varMCon === 1
+        ? cache.varC1
+        : cache.varC1Prev;
 
-    cache.varCdSession = round2(newVarS - refClose);
-    cache.varCdpSession = round1((cache.varCdSession / refClose) * 100);
+         cache.varCdSession  = round2(newVarS - ref);
+         cache.varCdpSession = round1((cache.varCdSession / ref) * 100);
+         cache.varCdInitialized = true;
+     }
+
+     // Live recompute ONLY when market is open
+     if (cache.varMCon === 1) {
+         cache.varCdSession  = round2(newVarS - cache.varC1);
+         cache.varCdpSession = round1((cache.varCdSession / cache.varC1) * 100);
+     }
+
+     // Always expose last computed value
+     cache.varCd  = cache.varCdSession;
+     cache.varCdp = cache.varCdpSession;
   }
 
-  // Recompute live ONLY when market is open
-  if (cache.varMCon === 1) {
-    const refClose = cache.varC1;
-
-    cache.varCdSession = round2(newVarS - refClose);
-    cache.varCdpSession = round1((cache.varCdSession / refClose) * 100);
-  }
-
-  // Always expose frozen or live value
-  cache.varCd = cache.varCdSession;
-  cache.varCdp = cache.varCdpSession;
-}
 
   if (cache.varC30) {
     cache.varCm = round2(newVarS - cache.varC30);
@@ -487,6 +491,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
