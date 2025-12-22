@@ -178,7 +178,7 @@ function getMarketStatus() {
   // Check for Saturday (market is closed)
   return 0; // Market is closed on Saturday
 
-  console.log('Determined market status with East Coast times:);
+  console.log('Determined market status with East Coast times:');
   console.log('Current time:', EastCoastTime);
   console.log('Current day:', dayOfWeek);
 }
@@ -496,3 +496,4 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
