@@ -147,11 +147,6 @@ function getMarketStatus() {
   const currentHour = EastCoastTime.getHours();
   const currentMinute = EastCoastTime.getMinutes();
   const dayOfWeek = EastCoastTime.getDay();  // 0 = Sunday, 6 = Saturday
-  
-  // Log current time in Eastern Time
-  console.log('Current time in Eastern Time:', EastCoastTime);
-  console.log('Current hour in Eastern Time:', currentHour);
-  console.log('Current day of the week in Eastern Time:', dayOfWeek);
 
   // Check if it's Monday to Thursday and between the break times
   if (dayOfWeek >= 1 && dayOfWeek <= 4) {
@@ -182,6 +177,10 @@ function getMarketStatus() {
 
   // Check for Saturday (market is closed)
   return 0; // Market is closed on Saturday
+
+  console.log('Determined market status with East Coast times:);
+  console.log('Current time:', EastCoastTime);
+  console.log('Current day:', dayOfWeek);
 }
 
 /* Takes newly polled varC* variables and varS to calculate market deltas */
@@ -204,12 +203,9 @@ function calculateDeltas() {
     cache.varCyp = round1((cache.varCy / C365) * 100);
 
     // Log results for debugging
-    console.log("Deltas calculated:");
-    console.log("varCd:", cache.varCd, "varCdp:", cache.varCdp);
-    console.log("varCm:", cache.varCm, "varCmp:", cache.varCmp);
-    console.log("varCy:", cache.varCy, "varCyp:", cache.varCyp);
+    console.log("Deltas calculated: ", cache.varCd, "(", cache.varCdp,") ; ",cache.varCm, "(", cache.varCmp,") ; ",cache.varCy, "(", cache.varCyp,")");
   } else {
-    console.log("Missing values for delta calculation. Waiting for missing data...");
+    console.log("Missing values for delta calculation.");
   }
 }
 
@@ -256,7 +252,7 @@ async function fetchCloseForDate(date) {
   const data = await res.json();
 
   // Log the raw response data for debugging
-  console.log("API Response:", data);
+  //console.log("fetchCloseForDate API Response: ", data);
 
   const day = Object.values(data?.rates || {})[0];
   const v = Number(day?.metals?.silver);
@@ -312,9 +308,7 @@ async function fetchTimeseries() {
   cache.varC30 = await fetchCloseForDate(dateMinus(30));  // Fetch data for 30 days ago
   cache.varC365 = await fetchCloseForDate(dateMinus(365));  // Fetch data for 365 days ago
 
-  console.log("Fetched varC1:", cache.varC1);
-  console.log("Fetched varC30:", cache.varC30);
-  console.log("Fetched varC365:", cache.varC365);
+  console.log("Fetched Historics:", cache.varC1, cache.varC30, cache.varC365);
 
    // Trigger delta calculation after fetching all historic close values
   calculateDeltas();
@@ -338,7 +332,7 @@ async function fetchSpot() {
   const data = await res.json();
 
   const S = Number(data?.rate?.price);
-  console.log("Current spot price (S):", S);
+   
   if (!Number.isFinite(S)) return;
 
   // Check if varMStatus is 1 and varS is the same as the previously fetched value.
@@ -360,9 +354,12 @@ async function fetchSpot() {
   else {            //We don't want varMStatus to update to on break if we are on a surprise freeze.
   cache.varMStatus = getMarketStatus();   // Set the global market status variable based on Eastern Time
   }
-
+   
   cache.varS = round2(S);
   cache.varSi = round2(S * varH);
+
+  console.log("Fetched current spots (S,varS,varSi): cache.S, cache.varS, cache.varSi);
+  console.log('Market status is: ', cache.varMStatus);
 
   // Call delta calculation after updating varS
   calculateDeltas();
@@ -377,6 +374,8 @@ async function fetchSpot() {
 async function lookforsurpriseclosure() {
   const varSprev = cache.varS; // snapshot
 
+  console.log("Testing for surprise market closure in 2 min...");
+   
   // wait 2 minutes
   await new Promise((resolve) => setTimeout(resolve, 2 * 60 * 1000));
 
@@ -388,7 +387,7 @@ async function lookforsurpriseclosure() {
     cache.varS === varSprev
     ) {
     cache.varMStatus = 3; // surprise closure
-    console.log("Surprise market closure detected");
+    console.log("Surprise market closure detected.");
     }
   cache.alertmode = 0;
 }
@@ -497,20 +496,3 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
