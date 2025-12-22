@@ -358,7 +358,7 @@ async function fetchSpot() {
   cache.varS = round2(S);
   cache.varSi = round2(S * varH);
 
-  console.log("Fetched current spots (S,varS,varSi): cache.S, cache.varS, cache.varSi);
+  console.log("Fetched current spots (S,varS,varSi):" cache.S, cache.varS, cache.varSi);
   console.log('Market status is: ', cache.varMStatus);
 
   // Call delta calculation after updating varS
@@ -496,4 +496,5 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
