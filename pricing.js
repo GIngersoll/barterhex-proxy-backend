@@ -1,6 +1,6 @@
 // PRICING – HexStack backend pricing (authoritative)
 
-const varA = 25.0;   // premium %, no discount
+const varA = 30.0;   // premium %, no discount
 const varB = 15.0;   // premium %, max discount
 const varC = 50;    // quantity for max discount
 const varD = 2;      // quantity for no discount
