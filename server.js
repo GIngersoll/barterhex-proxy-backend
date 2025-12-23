@@ -13,6 +13,8 @@ const cron = require("node-cron");
 
 const app = express();
 
+app.use(express.json());
+
 const { getPricing } = require("./pricing");
 
 /* -----------------------------
@@ -27,6 +29,9 @@ const varF = 10;
 
 // Troy ounces per token
 const varH = 0.1;
+
+// Draft order expiration (minutes)
+const DRAFT_EXPIRY_MINUTES = 10;
 
 // Market opening and closing times (user-defined, in human-readable format)
 const varMOpen = new Date();
@@ -489,6 +494,87 @@ app.get("/proxy/pricing", (req, res) => {
 });
 
 /* -----------------------------
+   DRAFT ORDER (CHECKOUT NOW)
+-------------------------------- */
+
+app.post("/proxy/draft-order", async (req, res) => {
+  // Disable caching
+  res.setHeader(
+    "Cache-Control",
+    "no-store, no-cache, must-revalidate, proxy-revalidate"
+  );
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+
+  // Verify Shopify App Proxy
+  if (!verifyProxy(req)) {
+    return res.status(403).json({ error: "invalid proxy signature" });
+  }
+
+  // Parse + validate quantity
+  const varQ = Number(req.body?.varQ);
+  if (!Number.isFinite(varQ) || varQ <= 0) {
+    return res.status(400).json({ error: "invalid quantity" });
+  }
+
+  // Compute fresh pricing (source of truth)
+  const pricing = getPricing(cache, varQ);
+  if (!pricing || !Number.isFinite(pricing.varTu)) {
+    return res.status(503).json({ error: "pricing unavailable" });
+  }
+
+  // Draft expiration timestamp (per request)
+  const expiresAt = new Date(
+    Date.now() + DRAFT_EXPIRY_MINUTES * 60 * 1000
+  ).toISOString();
+
+  try {
+    const r = await fetch(
+      `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/draft_orders.json`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token":
+            process.env.SHOPIFY_ADMIN_ACCESS_TOKEN
+        },
+        body: JSON.stringify({
+          draft_order: {
+            line_items: [
+              {
+                title: "BarterHex",
+                quantity: varQ,
+                price: pricing.varTu
+              }
+            ],
+            expires_at: expiresAt,
+            use_customer_default_address: true
+          }
+        })
+      }
+    );
+
+    const data = await r.json();
+
+    const checkoutUrl =
+      data?.draft_order?.invoice_url ||
+      data?.draft_order?.checkout_url;
+
+    if (!checkoutUrl) {
+      return res
+        .status(502)
+        .json({ error: "draft order failed" });
+    }
+
+    res.json({ checkout_url: checkoutUrl });
+
+  } catch (err) {
+    console.error("Draft order error:", err);
+    res.status(500).json({ error: "server error" });
+  }
+});
+
+/* -----------------------------
    START SERVER
 -------------------------------- */
 
@@ -496,6 +582,7 @@ app.get("/proxy/pricing", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
