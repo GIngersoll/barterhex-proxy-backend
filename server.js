@@ -606,7 +606,7 @@ app.post("/proxy/draft-order", async (req, res) => {
           draft_order: {
             line_items: [
               {
-                title: "HexStack - 30x BarterHex",
+                title: "HexStack - 30xBarterHex",
                 quantity: varQ,
                 price: pricing.varTu
               }
@@ -648,6 +648,7 @@ if (!process.env.SHOPIFY_ADMIN_TOKEN) {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
