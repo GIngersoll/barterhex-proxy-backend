@@ -216,11 +216,15 @@ function calculateDeltas() {
 
 app.get("/auth", (req, res) => {
   const shop = req.query.shop;
-  if (!shop) return res.status(400).send("Missing shop");
+  if (!shop) {
+    return res.status(400).send("Missing shop");
+  }
 
   const scopes = "write_draft_orders";
+
+  // IMPORTANT: redirect must point back to THIS backend, not the store
   const redirectUri =
-    `https://${process.env.SHOPIFY_STORE_DOMAIN}/auth/callback`;
+    "https://barterhex-proxy-backend.onrender.com/auth/callback";
 
   const installUrl =
     `https://${shop}/admin/oauth/authorize` +
@@ -235,6 +239,7 @@ const SHOP_TOKENS = {}; // in-memory (OK for single store)
 
 app.get("/auth/callback", async (req, res) => {
   const { shop, code } = req.query;
+
   if (!shop || !code) {
     return res.status(400).send("Invalid OAuth callback");
   }
@@ -243,9 +248,9 @@ app.get("/auth/callback", async (req, res) => {
     `https://${shop}/admin/oauth/access_token`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json",
-                 "X-Shopify-Access-Token": token
-               },
+      headers: {
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({
         client_id: process.env.SHOPIFY_API_KEY,
         client_secret: process.env.SHOPIFY_APP_SECRET,
@@ -255,6 +260,7 @@ app.get("/auth/callback", async (req, res) => {
   );
 
   const data = await tokenRes.json();
+
   if (!data.access_token) {
     return res.status(500).send("Token exchange failed");
   }
@@ -549,6 +555,17 @@ app.get("/proxy/pricing", (req, res) => {
 -------------------------------- */
 
 app.post("/proxy/draft-order", async (req, res) => {
+
+  const shop = req.query.shop || process.env.SHOPIFY_STORE_DOMAIN;
+  const token = SHOP_TOKENS[shop];
+
+  if (!token) {
+    return res.status(401).json({ error: "app not authorized" });
+  }
+
+
+
+   
   // Disable caching
   res.setHeader(
     "Cache-Control",
@@ -638,6 +655,7 @@ app.post("/proxy/draft-order", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
