@@ -608,7 +608,7 @@ app.post("/proxy/draft-order", async (req, res) => {
           draft_order: {
             line_items: [
               {
-                title: "BarterHex",
+                title: "HexStack - 30x BarterHex",
                 quantity: varQ,
                 price: pricing.varTu
               }
@@ -646,6 +646,7 @@ app.post("/proxy/draft-order", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
