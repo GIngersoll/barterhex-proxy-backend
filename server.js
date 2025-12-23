@@ -237,8 +237,6 @@ app.get("/auth", (req, res) => {
   res.redirect(installUrl);
 });
 
-const SHOP_TOKENS = {}; // in-memory (OK for single store)
-
 app.get("/auth/callback", async (req, res) => {
   const { shop, code } = req.query;
 
@@ -267,12 +265,9 @@ app.get("/auth/callback", async (req, res) => {
     return res.status(500).send("Token exchange failed");
   }
 
-  // Store token (single-store safe)
-  SHOP_TOKENS[shop] = data.access_token;
-
-  console.log("ACCESS TOKEN:", data.access_token);
-   
+  console.log("OAuth successful. Set SHOPIFY_ADMIN_TOKEN in Render to:", data.access_token);
   res.send("App installed successfully. You may close this window.");
+
 });
 
 /* -----------------------------
@@ -572,13 +567,14 @@ app.post("/proxy/draft-order", async (req, res) => {
     return res.status(403).json({ error: "invalid proxy signature" });
   }
 
-  // 🔑 OAuth token lookup MUST be first
-  const shop = req.query.shop || process.env.SHOPIFY_STORE_DOMAIN;
-  const token = SHOP_TOKENS[shop];
+  const token = process.env.SHOPIFY_ADMIN_TOKEN;
 
   if (!token) {
-    return res.status(401).json({ error: "app not authorized" });
+    return res.status(401).json({ error: "admin token missing" });
   }
+
+  // 🔑 OAuth token lookup MUST be first
+  const shop = req.query.shop || process.env.SHOPIFY_STORE_DOMAIN;
 
   // Parse + validate quantity
   const varQ = Number(req.body?.varQ);
@@ -603,8 +599,8 @@ app.post("/proxy/draft-order", async (req, res) => {
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "X-Shopify-Access-Token": token
+           "Content-Type": "application/json",
+           "X-Shopify-Access-Token": token
         },
         body: JSON.stringify({
           draft_order: {
@@ -644,17 +640,15 @@ app.post("/proxy/draft-order", async (req, res) => {
    START SERVER
 -------------------------------- */
 
-const SHOP_TOKENS = {};
-
-// 🔍 Startup sanity check
-if (!SHOP_TOKENS[process.env.SHOPIFY_STORE_DOMAIN]) {
-  console.log("OAuth token missing — reauth required");
+if (!process.env.SHOPIFY_ADMIN_TOKEN) {
+  console.warn("⚠️ SHOPIFY_ADMIN_TOKEN not set — checkout will fail");
 }
 
 // Start the backend server
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
