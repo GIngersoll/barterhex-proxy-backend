@@ -214,6 +214,57 @@ function calculateDeltas() {
   }
 }
 
+app.get("/auth", (req, res) => {
+  const shop = req.query.shop;
+  if (!shop) return res.status(400).send("Missing shop");
+
+  const scopes = "write_draft_orders";
+  const redirectUri =
+    `https://${process.env.SHOPIFY_STORE_DOMAIN}/auth/callback`;
+
+  const installUrl =
+    `https://${shop}/admin/oauth/authorize` +
+    `?client_id=${process.env.SHOPIFY_API_KEY}` +
+    `&scope=${scopes}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}`;
+
+  res.redirect(installUrl);
+});
+
+const SHOP_TOKENS = {}; // in-memory (OK for single store)
+
+app.get("/auth/callback", async (req, res) => {
+  const { shop, code } = req.query;
+  if (!shop || !code) {
+    return res.status(400).send("Invalid OAuth callback");
+  }
+
+  const tokenRes = await fetch(
+    `https://${shop}/admin/oauth/access_token`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json",
+                 "X-Shopify-Access-Token": token
+               },
+      body: JSON.stringify({
+        client_id: process.env.SHOPIFY_API_KEY,
+        client_secret: process.env.SHOPIFY_APP_SECRET,
+        code
+      })
+    }
+  );
+
+  const data = await tokenRes.json();
+  if (!data.access_token) {
+    return res.status(500).send("Token exchange failed");
+  }
+
+  // Store token (single-store safe)
+  SHOP_TOKENS[shop] = data.access_token;
+
+  res.send("App installed successfully. You may close this window.");
+});
+
 /* -----------------------------
    SHOPIFY APP PROXY VERIFICATION
 -------------------------------- */
@@ -535,8 +586,13 @@ app.post("/proxy/draft-order", async (req, res) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Shopify-Access-Token":
-            process.env.SHOPIFY_ADMIN_ACCESS_TOKEN
+          const shop = req.query.shop || process.env.SHOPIFY_STORE_DOMAIN;
+          const token = SHOP_TOKENS[shop];
+
+          if (!token) {
+          return res.status(401).json({ error: "app not authorized" });
+          }
+
         },
         body: JSON.stringify({
           draft_order: {
@@ -582,6 +638,7 @@ app.post("/proxy/draft-order", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
