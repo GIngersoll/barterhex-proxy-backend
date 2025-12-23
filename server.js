@@ -17,6 +17,8 @@ app.use(express.json());
 
 const { getPricing } = require("./pricing");
 
+console.log("SHOPIFY_API_KEY:", process.env.SHOPIFY_API_KEY);
+
 /* -----------------------------
    CONFIGURATION
 -------------------------------- */
@@ -644,6 +646,7 @@ app.post("/proxy/draft-order", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
