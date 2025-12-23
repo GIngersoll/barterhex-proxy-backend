@@ -270,6 +270,8 @@ app.get("/auth/callback", async (req, res) => {
   // Store token (single-store safe)
   SHOP_TOKENS[shop] = data.access_token;
 
+  console.log("ACCESS TOKEN:", data.access_token);
+   
   res.send("App installed successfully. You may close this window.");
 });
 
@@ -642,10 +644,18 @@ app.post("/proxy/draft-order", async (req, res) => {
    START SERVER
 -------------------------------- */
 
+const SHOP_TOKENS = {};
+
+// 🔍 Startup sanity check
+if (!SHOP_TOKENS[process.env.SHOPIFY_STORE_DOMAIN]) {
+  console.log("OAuth token missing — reauth required");
+}
+
 // Start the backend server
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
