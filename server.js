@@ -555,17 +555,6 @@ app.get("/proxy/pricing", (req, res) => {
 -------------------------------- */
 
 app.post("/proxy/draft-order", async (req, res) => {
-
-  const shop = req.query.shop || process.env.SHOPIFY_STORE_DOMAIN;
-  const token = SHOP_TOKENS[shop];
-
-  if (!token) {
-    return res.status(401).json({ error: "app not authorized" });
-  }
-
-
-
-   
   // Disable caching
   res.setHeader(
     "Cache-Control",
@@ -577,6 +566,14 @@ app.post("/proxy/draft-order", async (req, res) => {
   // Verify Shopify App Proxy
   if (!verifyProxy(req)) {
     return res.status(403).json({ error: "invalid proxy signature" });
+  }
+
+  // 🔑 OAuth token lookup MUST be first
+  const shop = req.query.shop || process.env.SHOPIFY_STORE_DOMAIN;
+  const token = SHOP_TOKENS[shop];
+
+  if (!token) {
+    return res.status(401).json({ error: "app not authorized" });
   }
 
   // Parse + validate quantity
@@ -591,25 +588,19 @@ app.post("/proxy/draft-order", async (req, res) => {
     return res.status(503).json({ error: "pricing unavailable" });
   }
 
-  // Draft expiration timestamp (per request)
+  // Draft expiration timestamp
   const expiresAt = new Date(
     Date.now() + DRAFT_EXPIRY_MINUTES * 60 * 1000
   ).toISOString();
 
   try {
     const r = await fetch(
-      `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/draft_orders.json`,
+      `https://${shop}/admin/api/2024-01/draft_orders.json`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          const shop = req.query.shop || process.env.SHOPIFY_STORE_DOMAIN;
-          const token = SHOP_TOKENS[shop];
-
-          if (!token) {
-          return res.status(401).json({ error: "app not authorized" });
-          }
-
+          "X-Shopify-Access-Token": token
         },
         body: JSON.stringify({
           draft_order: {
@@ -634,9 +625,7 @@ app.post("/proxy/draft-order", async (req, res) => {
       data?.draft_order?.checkout_url;
 
     if (!checkoutUrl) {
-      return res
-        .status(502)
-        .json({ error: "draft order failed" });
+      return res.status(502).json({ error: "draft order failed" });
     }
 
     res.json({ checkout_url: checkoutUrl });
@@ -655,6 +644,7 @@ app.post("/proxy/draft-order", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
