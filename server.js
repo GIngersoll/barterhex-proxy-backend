@@ -125,25 +125,30 @@ function dedupeConsecutive(arr) {
 
 /* Takes newly polled varC* variables and varS to calculate market deltas */
 function calculateDeltas() {
-  if (Number.isFinite(cache.varS) && Number.isFinite(cache.varC1)) {
+  if (!Number.isFinite(cache.varS)) {
+    console.log("Delta skipped: missing varS");
+    return; // nothing can compute without spot
+  }
+
+  if (Number.isFinite(cache.varC1)) {
     cache.varCd  = round2(cache.varS - cache.varC1);
     cache.varCdp = round1((cache.varCd / cache.varC1) * 100);
   } else {
-    console.log("Delta (1D) skipped: missing varS or varC1");
+    console.log("Delta (1D) skipped: missing varC1");
   }
 
-  if (Number.isFinite(cache.varS) && Number.isFinite(cache.varC30)) {
+  if (Number.isFinite(cache.varC30)) {
     cache.varCm  = round2(cache.varS - cache.varC30);
     cache.varCmp = round1((cache.varCm / cache.varC30) * 100);
   } else {
-    console.log("Delta (30D) skipped: missing varS or varC30");
+    console.log("Delta (30D) skipped: missing varC30");
   }
 
-  if (Number.isFinite(cache.varS) && Number.isFinite(cache.varC365)) {
+  if (Number.isFinite(cache.varC365)) {
     cache.varCy  = round2(cache.varS - cache.varC365);
     cache.varCyp = round1((cache.varCy / cache.varC365) * 100);
   } else {
-    console.log("Delta (365D) skipped: missing varS or varC365");
+    console.log("Delta (365D) skipped: missing varC365");
   }
 }
 
@@ -559,6 +564,7 @@ if (!process.env.SHOPIFY_ADMIN_TOKEN) {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
