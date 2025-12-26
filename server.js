@@ -201,6 +201,25 @@ app.get("/auth/callback", async (req, res) => {
 
 });
 
+async function fetchCloseWithFallback(daysAgo, maxLookback = 10) {
+  for (let i = 0; i <= maxLookback; i++) {
+    const v = await fetchCloseForDate(dateMinus(daysAgo + i));
+    if (Number.isFinite(v)) {
+      if (i > 0) {
+        console.log(
+          `Fallback used for varC${daysAgo}: ${i} day(s) back`
+        );
+      }
+      return v;
+    }
+  }
+
+  console.log(
+    `Fallback failed for varC${daysAgo}: no valid close within ${maxLookback} days`
+  );
+  return null;
+}
+
 /* -----------------------------
    SHOPIFY APP PROXY VERIFICATION
 -------------------------------- */
@@ -297,8 +316,8 @@ async function fetchTimeseries() {
   }
 
   // Longer horizons (no special handling needed)
-  cache.varC30 = await fetchCloseForDate(dateMinus(30));  // Fetch data for 30 days ago
-  cache.varC365 = await fetchCloseForDate(dateMinus(365));  // Fetch data for 365 days ago
+  cache.varC30  = await fetchCloseWithFallback(30);  // Fetch data for 30 days ago or further if null is returned.
+  cache.varC30  = await fetchCloseWithFallback(365);;  // Fetch data for 365 days ago or further if null is returned.
 
   console.log("Fetched Historics:", cache.varC1, cache.varC30, cache.varC365);
 
@@ -540,6 +559,7 @@ if (!process.env.SHOPIFY_ADMIN_TOKEN) {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
