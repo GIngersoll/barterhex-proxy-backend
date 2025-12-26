@@ -227,6 +227,7 @@ async function fetchCloseWithFallback(daysAgo, maxLookback = 10) {
 
 function updateChartData() {
   updateMarketStatus(cache, cache.varS, fetchSpot);
+  console.log('Market status is: ', cache.varMStatus);
   calculateDeltas();
   cache.updatedAt = new Date(
     new Date().toLocaleString("en-US", { timeZone: "America/New_York" })
@@ -362,7 +363,6 @@ async function fetchSpot() {
   cache.varSi = round2(S * varH);
 
   console.log("Fetched current spots (S,varS,varSi):", S, cache.varS, cache.varSi);
-  console.log('Market status is: ', cache.varMStatus);
 }
 
 /* -----------------------------
@@ -564,6 +564,7 @@ if (!process.env.SHOPIFY_ADMIN_TOKEN) {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
