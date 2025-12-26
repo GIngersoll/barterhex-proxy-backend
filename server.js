@@ -351,7 +351,7 @@ async function fetchSpot() {
   url.searchParams.set("metal", "silver");
   url.searchParams.set("currency", "USD");
    
-  const res = await fetch(/* spot url */);
+  const res = await fetch(url);
   const S = Number((await res.json())?.rate?.price);
    
   if (!Number.isFinite(S)) return;
@@ -562,6 +562,7 @@ if (!process.env.SHOPIFY_ADMIN_TOKEN) {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
