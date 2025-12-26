@@ -329,7 +329,7 @@ async function fetchTimeseries() {
 
   // Longer horizons with fallback (Without using median-calculating array defined by varE)
   cache.varC30  = await fetchCloseWithFallback(30);  // Fetch data for 30 days ago or further if null is returned.
-  cache.varC30  = await fetchCloseWithFallback(365);;  // Fetch data for 365 days ago or further if null is returned.
+  cache.varC365  = await fetchCloseWithFallback(365);;  // Fetch data for 365 days ago or further if null is returned.
 
   console.log("Fetched Historics:", cache.varC1, cache.varC30, cache.varC365);
 
@@ -562,6 +562,7 @@ if (!process.env.SHOPIFY_ADMIN_TOKEN) {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
