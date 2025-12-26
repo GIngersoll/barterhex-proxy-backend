@@ -225,6 +225,12 @@ async function fetchCloseWithFallback(daysAgo, maxLookback = 10) {
   return null;
 }
 
+function updateChartData() {
+  updateMarketStatus(cache, cache.varS, fetchSpot);
+  calculateDeltas();
+  cache.updatedAt = getEastCoastISOString();
+}
+
 /* -----------------------------
    SHOPIFY APP PROXY VERIFICATION
 -------------------------------- */
@@ -277,8 +283,9 @@ async function fetchCloseForDate(date) {
 
 /**
  * Fetch varE-day timeseries
- * - Populate calendar-based closes (private)
- * - Compute deduplicated median signal (public)
+ * - Populate calendar-based closes (ordered)
+ * - Deduplicate array into vald closes (trading)
+ * - Compute deduplicated median signal (varSm)
  */
 async function fetchTimeseries() {
   const url = new URL("https://api.metals.dev/v1/timeseries");
@@ -320,7 +327,7 @@ async function fetchTimeseries() {
     cache.varC1 = trading[trading.length - 1]; // Fallback to the last close if no different value is found
   }
 
-  // Longer horizons (no special handling needed)
+  // Longer horizons with fallback (Without using median-calculating array defined by varE)
   cache.varC30  = await fetchCloseWithFallback(30);  // Fetch data for 30 days ago or further if null is returned.
   cache.varC30  = await fetchCloseWithFallback(365);;  // Fetch data for 365 days ago or further if null is returned.
 
@@ -343,30 +350,17 @@ async function fetchSpot() {
   url.searchParams.set("api_key", API_KEY);
   url.searchParams.set("metal", "silver");
   url.searchParams.set("currency", "USD");
-
-  const res = await fetch(url);
-  const data = await res.json();
-
-  const S = Number(data?.rate?.price);
+   
+  const res = await fetch(/* spot url */);
+  const S = Number((await res.json())?.rate?.price);
    
   if (!Number.isFinite(S)) return;
-
-  updateMarketStatus(cache, S, fetchSpot);
    
-  cache.varS = round2(S);
+  cache.varS  = round2(S);
   cache.varSi = round2(S * varH);
 
   console.log("Fetched current spots (S,varS,varSi):", S, cache.varS, cache.varSi);
   console.log('Market status is: ', cache.varMStatus);
-
-  // Call delta calculation after updating varS
-  calculateDeltas();
-  
-  const now = new Date();
-  const EastCoastTime = new Date(
-  now.toLocaleString("en-US", { timeZone: "America/New_York" })
-  );
-  cache.updatedAt = EastCoastTime.toISOString();
 }
 
 /* -----------------------------
@@ -377,13 +371,17 @@ async function fetchSpot() {
 (async () => {
   await fetchSpot();
   await fetchTimeseries();
+  updateChartData();
 })();
 
 // Run daily at 6:10 Eastern Time to refresh timeseries data
 cron.schedule("10 6 * * *", fetchTimeseries, { timezone: "America/New_York" });
 
 // Refresh spot price every varF minutes
-setInterval(fetchSpot, varF * 60 * 1000);
+setInterval(async () => {
+  await fetchSpot();
+  updateChartData();
+}, varF * 60 * 1000);
 
 /* -----------------------------
    SHOPIFY APP PROXY ENDPOINT
@@ -557,13 +555,14 @@ app.post("/proxy/draft-order", async (req, res) => {
 -------------------------------- */
 
 if (!process.env.SHOPIFY_ADMIN_TOKEN) {
-  console.warn("⚠️ SHOPIFY_ADMIN_TOKEN not set — checkout will fail");
+  console.warn("SHOPIFY_ADMIN_TOKEN not set — checkout will fail");
 }
 
 // Start the backend server
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
