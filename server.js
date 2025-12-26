@@ -11,11 +11,12 @@ const express = require("express");
 const crypto = require("crypto");
 const cron = require("node-cron");
 
+const { updateMarketStatus } = require("./marketStatus");
+const { getPricing } = require("./pricing");
+
 const app = express();
 
 app.use(express.json());
-
-const { getPricing } = require("./pricing");
 
 console.log("SHOPIFY_API_KEY:", process.env.SHOPIFY_API_KEY);
 
@@ -34,28 +35,6 @@ const varH = 0.1;
 
 // Draft order expiration (minutes)
 const DRAFT_EXPIRY_MINUTES = 10;
-
-// Market opening and closing times (user-defined, in human-readable format)
-const varMOpen = new Date();
-varMOpen.setHours(18, 0, 0, 0); // Market opens at 6:00 PM on Sunday
-
-const varMClose = new Date();
-varMClose.setHours(17, 0, 0, 0); // Market closes at 5:00 PM on Friday
-
-// Break start and end times (Monday to Thursday)
-const varMOnBreak = [
-  new Date().setHours(17, 0, 0, 0), // Monday break start at 5:00 PM
-  new Date().setHours(17, 0, 0, 0), // Tuesday break start at 5:00 PM
-  new Date().setHours(17, 0, 0, 0), // Wednesday break start at 5:00 PM
-  new Date().setHours(17, 0, 0, 0), // Thursday break start at 5:00 PM
-];
-
-const varMOffBreak = [
-  new Date().setHours(18, 0, 0, 0), // Monday break end at 6:00 PM
-  new Date().setHours(18, 0, 0, 0), // Tuesday break end at 6:00 PM
-  new Date().setHours(18, 0, 0, 0), // Wednesday break end at 6:00 PM
-  new Date().setHours(18, 0, 0, 0), // Thursday break end at 6:00 PM
-];
 
 /* -----------------------------
    ENVIRONMENT
@@ -102,7 +81,7 @@ const cache = {
   // Last update timestamp
   updatedAt: null,
 
-  alertmode: null
+  alertmode: 0
 };
 
 /* -----------------------------
@@ -142,52 +121,6 @@ function median(arr) {
 /* Remove consecutive duplicates */
 function dedupeConsecutive(arr) {
   return arr.filter((v, i) => i === 0 || v !== arr[i - 1]);
-}
-
-/* Used to compare the currently polled time to variables and determine market to be scheduled open or closed */
-function getMarketStatus() {
-  // Get current date and time in Eastern Time (ET)
-  const now = new Date();
-  const EastCoastTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-
-  // Extract Eastern Time (ET) values
-  const currentHour = EastCoastTime.getHours();
-  const currentMinute = EastCoastTime.getMinutes();
-  const dayOfWeek = EastCoastTime.getDay();  // 0 = Sunday, 6 = Saturday
-
-  // Check if it's Monday to Thursday and between the break times
-  if (dayOfWeek >= 1 && dayOfWeek <= 4) {
-    const breakStart = varMOnBreak[dayOfWeek - 1];  // Break start for current day
-    const breakEnd = varMOffBreak[dayOfWeek - 1];   // Break end for current day
-
-    if (EastCoastTime >= breakStart && EastCoastTime < breakEnd) {
-      return 2; // Market is on break (lunch)
-    }
-    return 1; // Market is open
-  }
-
-  // Check if it's Friday and after market close time
-  if (dayOfWeek === 5) {
-    if (EastCoastTime >= varMClose) {
-      return 0; // Market is closed after market close time on Friday
-    }
-    return 1; // Market is open on Friday before close time
-  }
-
-  // Check if it's Sunday and after market open time
-  if (dayOfWeek === 0) {
-    if (EastCoastTime >= varMOpen) {
-      return 1; // Market is open after market open time on Sunday
-    }
-    return 0; // Market is closed on Sunday before open time
-  }
-
-  // Check for Saturday (market is closed)
-  return 0; // Market is closed on Saturday
-
-  console.log('Determined market status with East Coast times:');
-  console.log('Current time:', EastCoastTime);
-  console.log('Current day:', dayOfWeek);
 }
 
 /* Takes newly polled varC* variables and varS to calculate market deltas */
@@ -396,25 +329,7 @@ async function fetchSpot() {
    
   if (!Number.isFinite(S)) return;
 
-  // Check if varMStatus is 1 and varS is the same as the previously fetched value.
-  if (cache.varMStatus === 1 && cache.varS === S && cache.alertmode === 0) {
-    cache.alertmode = 1;
-    lookforsurpriseclosure();
-  }
-
-  // This tests if surprise market freeze is over and...
-  if (cache.varMStatus === 3) {
-     if (cache.varS != S && getMarketStatus() !== 0){
-     cache.varMStatus = 1;
-     console.log("Spot change ended freeze");
-     } else if (getMarketStatus() === 0){
-     cache.varMStatus = 0;
-     console.log("Market close ended freeze");
-     }
-  }
-  else {            //We don't want varMStatus to update to on break if we are on a surprise freeze.
-  cache.varMStatus = getMarketStatus();   // Set the global market status variable based on Eastern Time
-  }
+  updateMarketStatus(cache, S, fetchSpot);
    
   cache.varS = round2(S);
   cache.varSi = round2(S * varH);
@@ -430,27 +345,6 @@ async function fetchSpot() {
   now.toLocaleString("en-US", { timeZone: "America/New_York" })
   );
   cache.updatedAt = EastCoastTime.toISOString();
-}
-
-async function lookforsurpriseclosure() {
-  const varSprev = cache.varS; // snapshot
-
-  console.log("Testing for surprise market closure in 2 min...");
-   
-  // wait 2 minutes
-  await new Promise((resolve) => setTimeout(resolve, 2 * 60 * 1000));
-
-  await fetchSpot();
-
-  if (
-    Number.isFinite(varSprev) &&
-    Number.isFinite(cache.varS) &&
-    cache.varS === varSprev
-    ) {
-    cache.varMStatus = 3; // surprise closure
-    console.log("Surprise market closure detected.");
-    }
-  cache.alertmode = 0;
 }
 
 /* -----------------------------
@@ -648,6 +542,7 @@ if (!process.env.SHOPIFY_ADMIN_TOKEN) {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
