@@ -125,27 +125,25 @@ function dedupeConsecutive(arr) {
 
 /* Takes newly polled varC* variables and varS to calculate market deltas */
 function calculateDeltas() {
-  // Ensure required values are available
-  if (cache.varS && cache.varC1 && cache.varC30 && cache.varC365) {
-    const S = cache.varS;
-    const C1 = cache.varC1;
-    const C30 = cache.varC30;
-    const C365 = cache.varC365;
-
-    // Calculate deltas
-    cache.varCd = round2(S - C1);
-    cache.varCdp = round1((cache.varCd / C1) * 100);
-
-    cache.varCm = round2(S - C30);
-    cache.varCmp = round1((cache.varCm / C30) * 100);
-
-    cache.varCy = round2(S - C365);
-    cache.varCyp = round1((cache.varCy / C365) * 100);
-
-    // Log results for debugging
-    console.log("Deltas calculated: ", cache.varCd, "(", cache.varCdp,") ; ",cache.varCm, "(", cache.varCmp,") ; ",cache.varCy, "(", cache.varCyp,")");
+  if (Number.isFinite(cache.varS) && Number.isFinite(cache.varC1)) {
+    cache.varCd  = round2(cache.varS - cache.varC1);
+    cache.varCdp = round1((cache.varCd / cache.varC1) * 100);
   } else {
-    console.log("Missing values for delta calculation.");
+    console.log("Delta (1D) skipped: missing varS or varC1");
+  }
+
+  if (Number.isFinite(cache.varS) && Number.isFinite(cache.varC30)) {
+    cache.varCm  = round2(cache.varS - cache.varC30);
+    cache.varCmp = round1((cache.varCm / cache.varC30) * 100);
+  } else {
+    console.log("Delta (30D) skipped: missing varS or varC30");
+  }
+
+  if (Number.isFinite(cache.varS) && Number.isFinite(cache.varC365)) {
+    cache.varCy  = round2(cache.varS - cache.varC365);
+    cache.varCyp = round1((cache.varCy / cache.varC365) * 100);
+  } else {
+    console.log("Delta (365D) skipped: missing varS or varC365");
   }
 }
 
@@ -423,20 +421,20 @@ app.get("/proxy/pricing", (req, res) => {
   }
 
   // Optional hard cap
-  const MAX_Q = 100;
+  const MAX_Q = 50;
   if (varQ > MAX_Q) {
     return res.status(400).json({ error: "quantity too large" });
   }
 
   // Ensure required market data exists
   if (!Number.isFinite(cache.varSm)) {
-    return res.status(503).json({ error: "pricing unavailable" });
+    return res.status(503).json({ error: "pricing unavailable, varSm failure" });
   }
 
   // Compute pricing
   const pricing = getPricing(cache, varQ);
   if (!pricing) {
-    return res.status(503).json({ error: "pricing unavailable" });
+    return res.status(503).json({ error: "pricing unavailable, varQ failure" });
   }
 
   // Success
@@ -542,6 +540,7 @@ if (!process.env.SHOPIFY_ADMIN_TOKEN) {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
