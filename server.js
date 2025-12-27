@@ -81,7 +81,7 @@ const cache = {
   // Last update timestamp
   updatedAt: null,
 
-  alertmode: 0
+  alertmode: 0,
 
   ready: false
 };
@@ -584,6 +584,7 @@ if (!process.env.SHOPIFY_ADMIN_TOKEN) {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
