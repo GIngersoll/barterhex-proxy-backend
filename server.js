@@ -370,7 +370,7 @@ async function fetchTimeseries() {
   //cache.varSm = round2(median(slice));
     cache.varSm = 83.51;
   //console.log("varSm set to:", cache.varSm, "(using", slice.length, "values)");
-  //cache.ready = true;
+  cache.ready = true;
   
 }
 
@@ -604,6 +604,7 @@ if (!process.env.SHOPIFY_ADMIN_TOKEN) {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
