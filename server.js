@@ -363,7 +363,7 @@ async function fetchTimeseries() {
   calculateDeltas();
 
   // Set varSm
-  const slice = trading.slice(-varE);
+  const slice = trading.slice(-varE).map(v => v.value);
   cache.varSm = round2(median(slice));
   cache.ready = true;
 
@@ -599,4 +599,5 @@ if (!process.env.SHOPIFY_ADMIN_TOKEN) {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
