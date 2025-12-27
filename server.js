@@ -284,6 +284,8 @@ async function fetchCloseForDate(date) {
   return Number.isFinite(v) ? v : null;
 }
 
+
+
 /**
  * Fetch varE-day timeseries
  * - Populate calendar-based closes (ordered)
@@ -291,6 +293,9 @@ async function fetchCloseForDate(date) {
  * - Compute deduplicated median signal (varSm)
  */
 async function fetchTimeseries() {
+
+                                                         console.log("fetchTimeseries START");
+   
   const url = new URL("https://api.metals.dev/v1/timeseries");
   url.searchParams.set("api_key", API_KEY);
   url.searchParams.set("start_date", dateMinus(varE + 10));
@@ -302,6 +307,8 @@ async function fetchTimeseries() {
   const rates = data?.rates || {};
   const closesByDate = {};
 
+                                                console.log("timeseries rates count:", Object.keys(rates || {}).length);
+   
   for (const [date, obj] of Object.entries(rates)) {
     const v = Number(obj?.metals?.silver);
     if (Number.isFinite(v)) closesByDate[date] = v;
@@ -350,11 +357,22 @@ async function fetchTimeseries() {
    // Trigger delta calculation after fetching all historic close values
   calculateDeltas();
 
-  // Deduplicated trading closes → median signal
-  cache.varSm = round2(median(trading.slice(-varE)));
+  if (trading.length < varE) {
+    console.log(
+      "fetchTimeseries: insufficient trading data",
+      "trading.length =", trading.length,
+      "varE =", varE
+    );
+    return;
+  }
 
+  const slice = trading.slice(-varE);
+  cache.varSm = round2(median(slice));
   cache.ready = true;
+
 }
+
+
 
 /**
  * Fetch live spot price and compute deltas
@@ -584,6 +602,7 @@ if (!process.env.SHOPIFY_ADMIN_TOKEN) {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
