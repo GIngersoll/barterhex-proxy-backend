@@ -293,6 +293,10 @@ async function fetchCloseForDate(date) {
  * - Compute deduplicated median signal (varSm)
  */
 async function fetchTimeseries() {
+  console.log(
+    "Max days worth of deduplicated data requested by varE:",
+    varE
+  );
    
   const url = new URL("https://api.metals.dev/v1/timeseries");
   url.searchParams.set("api_key", API_KEY);
@@ -320,6 +324,11 @@ async function fetchTimeseries() {
 
   const trading = ordered.filter(
     (v, i, arr) => i === 0 || v.value !== arr[i - 1].value
+  );
+
+  console.log(
+    "Days worth of data deduplicated from last 30 days:",
+    trading.length
   );
 
   // Now, instead of just using the previous day's close for varC1,
@@ -590,3 +599,4 @@ if (!process.env.SHOPIFY_ADMIN_TOKEN) {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
