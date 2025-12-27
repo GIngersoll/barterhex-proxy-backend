@@ -82,6 +82,8 @@ const cache = {
   updatedAt: null,
 
   alertmode: 0
+
+  ready: false
 };
 
 /* -----------------------------
@@ -350,6 +352,8 @@ async function fetchTimeseries() {
 
   // Deduplicated trading closes → median signal
   cache.varSm = round2(median(trading.slice(-varE)));
+
+  cache.ready = true;
 }
 
 /**
@@ -461,12 +465,12 @@ app.get("/proxy/pricing", (req, res) => {
     return res.status(400).json({ error: "quantity too large" });
   }
 
-  // Ensure required market data exists
-  if (!Number.isFinite(cache.varSm)) {
-    return res.status(503).json({ error: "pricing unavailable, varSm failure" });
+  // Ensure market data is ready
+  if (!cache.ready) {
+    return res.status(503).json({ error: "market data warming up" });
   }
 
-  // Compute pricing
+   // Compute pricing
   const pricing = getPricing(cache, varQ);
   if (!pricing) {
     return res.status(503).json({ error: "pricing unavailable, varQ failure" });
@@ -509,6 +513,11 @@ app.post("/proxy/draft-order", async (req, res) => {
     return res.status(400).json({ error: "invalid quantity" });
   }
 
+  // Ensure market data is ready
+  if (!cache.ready) {
+    return res.status(503).json({ error: "market data warming up" });
+  }
+   
   // Compute fresh pricing (source of truth)
   const pricing = getPricing(cache, varQ);
   if (!pricing || !Number.isFinite(pricing.varTu)) {
@@ -575,6 +584,7 @@ if (!process.env.SHOPIFY_ADMIN_TOKEN) {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
