@@ -1,10 +1,10 @@
 // PRICING – HexStack backend pricing (authoritative)
 
-const varA = 30.0;   // premium %, no discount
+const varA = 35.0;   // premium %, no discount
 const varB = 15.0;   // premium %, max discount
 const varC = 50;    // quantity for max discount
-const varD = 2;      // quantity for no discount
-const varX = 2;    // discount curve exponent: higher = more aggressive early discount
+const varD = 1;      // quantity for no discount
+const varX = 2.2;    // discount curve exponent: higher = more aggressive early discount
 
 const varG = 3.0;    // ounces per HexStack (backend truth)
 
