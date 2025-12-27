@@ -298,7 +298,7 @@ async function fetchTimeseries() {
    
   const url = new URL("https://api.metals.dev/v1/timeseries");
   url.searchParams.set("api_key", API_KEY);
-  url.searchParams.set("start_date", dateMinus(varE + 10));
+  url.searchParams.set("start_date", dateMinus(30));
   url.searchParams.set("end_date", dateMinus(1)); 
 
   const res = await fetch(url);
@@ -602,6 +602,7 @@ if (!process.env.SHOPIFY_ADMIN_TOKEN) {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
