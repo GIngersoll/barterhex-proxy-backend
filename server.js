@@ -226,8 +226,6 @@ async function fetchCloseWithFallback(daysAgo, maxLookback = 10) {
 }
 
 function updateChartData() {
-  updateMarketStatus(cache, cache.varS, fetchSpot);
-  console.log('Market status is: ', cache.varMStatus);
   calculateDeltas();
   cache.updatedAt = new Date(
     new Date().toLocaleString("en-US", { timeZone: "America/New_York" })
@@ -310,24 +308,35 @@ async function fetchTimeseries() {
   // Pre-deduplication: This array will include all the fetched close values.
   const ordered = Object.keys(closesByDate)
     .sort()
-    .map((d) => closesByDate[d]);
+    .map((date) => ({
+      date,
+      value: closesByDate[date]
+    }));
 
-  // Deduplication
-  const trading = dedupeConsecutive(ordered);
+  const trading = ordered.filter(
+    (v, i, arr) => i === 0 || v.value !== arr[i - 1].value
+  );
 
-  // Now, instead of just using the previous day's close for varC1, we find the most recent close that doesn't match varS
+  // Now, instead of just using the previous day's close for varC1,
+  // we find the most recent close that doesn't match varS
+  // AND skip Friday closes when market is closed
+  
   let foundValidC1 = false;
+
   for (let i = trading.length - 1; i >= 0; i--) {
-    if (trading[i] !== cache.varS) {
-      cache.varC1 = trading[i]; // Use this close as varC1
+    const { date, value } = trading[i];
+    
+    // If market is closed, skip Friday closes
+    if (cache.varMStatus === 0) {
+      const day = new Date(date + "T00:00:00Z").getUTCDay(); // 5 = Friday
+      if (day === 5) continue;
+    }
+    
+    if (value !== cache.varS) {
+      cache.varC1 = value;
       foundValidC1 = true;
       break;
     }
-  }
-
-  // If no valid C1 is found (which should be rare if varS isn't the same as the close), fall back to previous day's close
-  if (!foundValidC1) {
-    cache.varC1 = trading[trading.length - 1]; // Fallback to the last close if no different value is found
   }
 
   // Longer horizons with fallback (Without using median-calculating array defined by varE)
@@ -361,8 +370,10 @@ async function fetchSpot() {
    
   cache.varS  = round2(S);
   cache.varSi = round2(S * varH);
-
   console.log("Fetched current spots (S,varS,varSi):", S, cache.varS, cache.varSi);
+  
+  updateMarketStatus(cache, cache.varS, fetchSpot);
+  console.log('Market status is: ', cache.varMStatus);
 }
 
 /* -----------------------------
@@ -564,6 +575,7 @@ if (!process.env.SHOPIFY_ADMIN_TOKEN) {
 app.listen(PORT, () => {
   console.log(`ENGINE backend running on port ${PORT}`);
 });
+
 
 
 
