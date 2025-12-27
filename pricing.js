@@ -45,10 +45,12 @@ function getPricing(cache, varQ) {
   if (!Number.isFinite(varQ) || varQ <= 0) return null;
 
   const { varS, varSm } = cache;
-  if (!Number.isFinite(varS) || !Number.isFinite(varSm)) return null;
+  if (!Number.isFinite(varS)) return null;
 
   // Conditional spot floor
-  const varSc = Math.max(varS, varSm);
+  const varSc = Number.isFinite(varSm)
+    ? Math.max(varS, varSm)
+    : varS;
 
   // Premium factor (decimal)
   const varPf = computeVarPf(varQ);
